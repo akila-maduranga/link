@@ -1,0 +1,93 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  passwordHash   String
+  role           String    @default("USER") // USER | ADMIN
+  emailVerified  DateTime?
+  verifyToken    String?   @unique
+  verifyTokenExp DateTime?
+  resetToken     String?   @unique
+  resetTokenExp  DateTime?
+  lastEmailSent  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  links      Link[]
+  shortLinks ShortLink[]
+}
+
+// Directory links: social media groups / channels submitted by users
+model Link {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  url         String
+  description String?
+  platform    String // telegram | whatsapp | facebook | youtube | discord | x | instagram | reddit | tiktok | linkedin | snapchat | twitch | pinterest | signal | other
+  category    String
+  country     String // ISO-3166 alpha-2 or "GLOBAL"
+  language    String // ISO-639 code or "multi"
+  members     String? // e.g. "12.5K members"
+  featured    Boolean  @default(false)
+  status      String   @default("ACTIVE") // ACTIVE | HIDDEN
+  views       Int      @default(0)
+  clicks      Int      @default(0)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([platform, status, createdAt])
+  @@index([category, status, createdAt])
+  @@index([country, status, createdAt])
+  @@index([language, status, createdAt])
+  @@index([status, featured, createdAt])
+  @@index([userId, createdAt])
+}
+
+// Shortened URLs with detailed analytics
+model ShortLink {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  destination String
+  title       String?
+  description String?
+  isActive    Boolean  @default(true)
+  clicks      Int      @default(0)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  events ShortLinkEvent[]
+
+  @@index([userId, createdAt])
+}
+
+// One row per click on a shortened link
+model ShortLinkEvent {
+  id          String    @id @default(cuid())
+  shortLinkId String
+  shortLink   ShortLink @relation(fields: [shortLinkId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  ipHash      String? // salted sha256 hash — never the raw IP
+  country     String? // ISO-3166 alpha-2
+  referrer    String? // referring domain only
+  browser     String?
+  os          String?
+  device      String? // desktop | mobile | tablet | bot
+  isBot       Boolean   @default(false)
+
+  @@index([shortLinkId, createdAt])
+}

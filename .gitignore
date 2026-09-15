@@ -1,0 +1,36 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files — never commit real secrets (the example stays in the repo)
+.env*
+!.env.example
+
+# database — runtime data only
+/db
+*.db
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# logs
+*.log
