@@ -1,0 +1,74 @@
+# ==============================================================================
+#  FindLink — build & publish the Docker image to GitHub Container Registry
+#
+#  Why: a 512 MB VPS often can't survive `next build` (the build step alone
+#  wants 1–2 GB). With this workflow, GitHub builds the image for you on
+#  every push — your VPS only ever PULLS the finished image (~200 MB, needs
+#  almost no RAM).
+#
+#  After pushing to GitHub, wait for this workflow to finish (repo → Actions
+#  tab → "Build Docker image"), then on the VPS:
+#
+#      ./install.sh --image ghcr.io/YOUR_USERNAME/findlink:latest
+#
+#  (or just ./install.sh — it auto-detects the image for public repos)
+#
+#  Private repo? The image is private too — on the VPS, once:
+#      docker login ghcr.io -u YOUR_USERNAME
+#  (password = a Personal Access Token with `read:packages` scope)
+# ==============================================================================
+name: Build Docker image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Layer cache lives in GitHub's cache storage — rebuilds after small
+          # code changes take ~2–4 minutes instead of ~10+.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

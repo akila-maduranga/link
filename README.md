@@ -104,7 +104,7 @@ including swap for the 512 MB build step.
 
 ---
 
-### 🟢 Step 3 — Deploy with one command (~5–15 min)
+### 🟢 Step 3 — Deploy with one command (~5 min)
 
 Still inside your VPS, clone your repo and run the installer:
 
@@ -117,10 +117,10 @@ cd findlink
 The installer automatically:
 
 1. ✅ checks Docker (and installs it if missing),
-2. ✅ creates a 1 GB **swap file** if your VPS has none (needed for the build on 512 MB),
+2. ✅ creates ~2 GB **swap** if your VPS has little (needed for local builds on 512 MB),
 3. ✅ generates a secure `AUTH_SECRET` and writes your `.env` with
    `APP_URL=https://findlink.site`,
-4. ✅ builds and starts the containers,
+4. ✅ **pulls the prebuilt image from GitHub** (see below) — or builds locally,
 5. ✅ waits for the health check to pass.
 
 When you see **“FindLink is up and healthy!”**, two containers are running:
@@ -133,6 +133,36 @@ configure.** 🎉
 > `curl http://127.0.0.1:3000/api/health` → `{"ok":true…}`
 
 <details>
+<summary>⭐ 512 MB VPS — let GitHub build the image for you (recommended)</summary>
+
+`next build` alone wants 1–2 GB of RAM; on a 512 MB VPS the local build
+**thrashes swap and looks stuck for 30+ minutes or gets OOM-killed**.
+
+The repo ships with a GitHub Actions workflow (`.github/workflows/build.yml`)
+that builds the Docker image on **every push to `main`** and publishes it to
+`ghcr.io`. Your VPS then only **pulls** the finished image — no build, ~200 MB
+download, works on any tiny VPS:
+
+1. Push your code to GitHub (Step 1) and wait ~5 min for the
+   **Actions → “Build Docker image”** workflow to finish (green ✓).
+2. On the VPS:
+
+   ```bash
+   ./install.sh --image ghcr.io/YOUR_USERNAME/findlink:latest
+   ```
+
+   (Plain `./install.sh` auto-detects the image for public repos, too.)
+
+**Private repo?** The image is private as well — log in once on the VPS:
+
+```bash
+docker login ghcr.io -u YOUR_USERNAME
+# password = a GitHub Personal Access Token with `read:packages` scope
+```
+
+</details>
+
+<details>
 <summary>Prefer doing it manually? (same result, 4 commands)</summary>
 
 ```bash
@@ -141,7 +171,7 @@ git clone https://github.com/YOUR_USERNAME/findlink.git && cd findlink
 cp .env.example .env
 nano .env          # set AUTH_SECRET (openssl rand -hex 32); CADDY_DOMAIN=findlink.site is already there
 
-docker compose up -d --build
+docker compose up -d --build      # or: docker compose pull findlink && docker compose up -d --no-build
 docker logs -f findlink
 ```
 
@@ -304,6 +334,7 @@ docker compose up -d
 | `ACME_EMAIL` | — | Optional email for Let's Encrypt expiry notices (also settable via `./install.sh --email …`) |
 | `APP_PORT` | — | Host port for **localhost-only** debug access (default `3000`); public traffic goes through Caddy on 80/443 |
 | `APP_BIND` | — | Default `127.0.0.1` (app private behind Caddy). `0.0.0.0` exposes it directly — not recommended |
+| `IMAGE` | — | Prebuilt app image (set automatically by `install.sh --image …`). Empty → build locally from the Dockerfile. Recommended for 512 MB VPSes |
 | `RESEND_API_KEY` | — | Resend API key. Without it, verification links are logged and shown in the UI (dev mode) |
 | `EMAIL_FROM` | — | `FindLink <noreply@findlink.site>` (requires a Resend-verified domain) |
 | `ALLOWED_EMAIL_DOMAINS` | — | New registrations limited to these email domains — default **Gmail + iCloud** (`gmail.com,googlemail.com,icloud.com,me.com,mac.com`). Set `*` to allow any |
@@ -316,7 +347,8 @@ After editing `.env`, always run `docker compose up -d` to apply.
 
 | Symptom | Fix |
 |---------|-----|
-| Build fails with `Killed` (OOM) | The 512 MB VPS ran out of memory during the Docker build. The installer normally creates swap — check with `free -h`. If there's no swap: `fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`, then `docker compose up -d --build` again |
+| Build gets stuck / `Killed` at `npm run build` | This is the 512 MB RAM limit — `next build` wants 1–2 GB. **Best fix:** deploy the prebuilt image instead (Step 3 → “let GitHub build the image for you”): `./install.sh --image ghcr.io/YOU/findlink:latest`. If you must build locally: make sure ~2 GB swap exists (`free -h`), and let it run — output appearing frozen during the compile step is normal on tiny VPSes. The build now aborts with a clear error (instead of hanging forever) if Turbopack exceeds its memory guardrail |
+| Build fails with `Killed` (OOM) | The 512 MB VPS ran out of memory during the Docker build. The installer normally creates ~2 GB swap — check with `free -h`. If there's no swap: `fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`, then `docker compose up -d --build` again |
 | `port is already allocated` (80/443) | A system web server is running — stop it, the stack brings its own proxy: `systemctl disable --now caddy nginx apache2` then `docker compose up -d` |
 | `port is already allocated` (3000) | Another app uses port 3000 — set a different `APP_PORT` in `.env` and `docker compose up -d` |
 | https://findlink.site doesn't load | 1) DNS: `ping findlink.site` must answer with your VPS IP. 2) Ports 80 + 443 open in any cloud firewall. 3) `docker logs findlink-caddy` shows certificate issuance. Wait a minute and reload |
@@ -359,6 +391,7 @@ After editing `.env`, always run `docker compose up -d` to apply.
 - GeoIP via CDN request headers (Cloudflare) — no multi-megabyte GeoIP database.
 - Swap file (created by the installer) carries the Docker build through its memory peak.
 - Memory budget: app capped at 450 MB + Caddy at 60 MB, with log rotation — the kernel always keeps breathing room.
+- Build optimized for low RAM: TypeScript checks skipped at build time, Turbopack runs in-process (one Node process, ~100 MB less peak), V8 heap capped, and a 1 GB Turbopack guardrail turns a would-be hang into a clear error. Or skip VPS builds entirely via the GitHub Actions image.
 
 ---
 

@@ -29,11 +29,21 @@ COPY . .
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     DATABASE_URL="file:/app/db/custom.db" \
-    AUTH_SECRET="build-time-placeholder-secret-value-0123456789"
+    AUTH_SECRET="build-time-placeholder-secret-value-0123456789" \
+    NODE_OPTIONS="--max-old-space-size=512" \
+    TURBOPACK_MEMORY_LIMIT=1024 \
+    NEXT_TURBOPACK_USE_WORKER=0
 
 # Generate the Prisma client (musl engine included via schema binaryTargets)
 RUN npx prisma generate
 
+# 512 MB VPS build profile:
+#   NODE_OPTIONS              → caps the V8 heap; the JS side may gently use
+#                               swap instead of blowing up the machine
+#   TURBOPACK_MEMORY_LIMIT    → Turbopack aborts with a clear error past 1 GB
+#                               instead of thrashing swap (looks like a hang)
+#   NEXT_TURBOPACK_USE_WORKER → runs Turbopack in-process: one Node process
+#                               instead of two (~100 MB less peak memory)
 RUN npm run build
 
 # ---------- Stage 3: runtime ----------

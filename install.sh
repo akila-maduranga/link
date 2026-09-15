@@ -4,7 +4,8 @@
 #
 #  Usage (from a cloned repo):
 #      ./install.sh [--domain findlink.site] [--resend-key re_xxx]
-#                    [--email you@example.com] [--port 3000]
+#                    [--email you@example.com] [--image ghcr.io/USER/findlink:latest]
+#                    [--port 3000]
 #
 #  Usage (via curl — pass the repo URL):
 #      curl -fsSL https://raw.githubusercontent.com/USER/REPO/main/install.sh \
@@ -16,6 +17,9 @@
 #                       enables automatic HTTPS via the built-in Caddy proxy)
 #      --resend-key KEY Resend API key for sending emails
 #      --email    ADDR  Let's Encrypt account email (expiry notices)
+#      --image    NAME  Use a PREBUILT image instead of building on the VPS
+#                       (strongly recommended for 512 MB VPS — see README).
+#                       Auto-detected from your GitHub remote when possible.
 #      --port     N     Host port for local debug access (default 3000)
 #      --update         Pull latest code, rebuild and restart (keeps .env & data)
 #      --yes            Assume yes for prompts (non-interactive)
@@ -38,13 +42,14 @@ banner() {
   echo -e "${RESET}"
 }
 
-REPO_URL=""; DOMAIN=""; RESEND_KEY=""; ACME_EMAIL=""; PORT="3000"; ASSUME_YES="false"; UPDATE="false"
+REPO_URL=""; DOMAIN=""; RESEND_KEY=""; ACME_EMAIL=""; IMAGE_ARG=""; PORT="3000"; ASSUME_YES="false"; UPDATE="false"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo) REPO_URL="$2"; shift 2 ;;
     --domain) DOMAIN="$2"; shift 2 ;;
     --resend-key) RESEND_KEY="$2"; shift 2 ;;
     --email) ACME_EMAIL="$2"; shift 2 ;;
+    --image) IMAGE_ARG="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --update) UPDATE="true"; shift ;;
     --yes|-y) ASSUME_YES="true"; shift ;;
@@ -112,28 +117,35 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # ------------------------------------------------------------------------------
-# 3. Swap check — 512 MB VPS needs swap to survive the Docker BUILD step
+# 3. Swap check — 512 MB VPS needs ~2 GB swap to survive the Docker BUILD step
 # ------------------------------------------------------------------------------
 total_mb=$(( $(awk '/MemTotal/ {print $2}' /proc/meminfo) / 1024 ))
 swap_mb=$(( $(awk '/SwapTotal/ {print $2}' /proc/meminfo) / 1024 ))
-if (( total_mb < 1200 && swap_mb < 400 )); then
-  warn "Low RAM (${total_mb} MB) and little/no swap (${swap_mb} MB)."
-  warn "A 1 GB swap file is strongly recommended — the Docker build step needs it."
-  if confirm "Create a 1 GB swap file now?"; then
-    if [[ -f /swapfile ]]; then
-      say "/swapfile already exists — reusing it."
-    else
-      dd if=/dev/zero of=/swapfile bs=1M count=1024 status=progress
+if (( total_mb < 1200 && swap_mb < 1900 )); then
+  warn "Low RAM (${total_mb} MB) and little swap (${swap_mb} MB)."
+  warn "~2 GB swap is strongly recommended — the Docker build step needs it."
+  if confirm "Create/extend swap to ~2 GB now?"; then
+    if [[ ! -f /swapfile ]]; then
+      dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
       chmod 600 /swapfile
       mkswap /swapfile
       swapon /swapfile
       grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-      echo 'vm.swappiness=10' > /etc/sysctl.d/99-findlink-swap.conf
-      sysctl -p /etc/sysctl.d/99-findlink-swap.conf >/dev/null
+    elif (( swap_mb < 1900 )); then
+      # Growing an active swap file requires swapoff (risky on 512 MB) —
+      # add a second file instead; Linux happily uses both.
+      say "/swapfile exists — adding /swapfile2 (1 GB) alongside it…"
+      dd if=/dev/zero of=/swapfile2 bs=1M count=1024 status=progress
+      chmod 600 /swapfile2
+      mkswap /swapfile2
+      swapon /swapfile2
+      grep -q '/swapfile2' /etc/fstab || echo '/swapfile2 none swap sw 0 0' >> /etc/fstab
     fi
-    ok "Swap enabled ($(awk '/SwapTotal/ {print $2}' /proc/meminfo | awk '{print $1/1024}') MB)"
+    echo 'vm.swappiness=10' > /etc/sysctl.d/99-findlink-swap.conf
+    sysctl -p /etc/sysctl.d/99-findlink-swap.conf >/dev/null
+    ok "Swap enabled ($(awk '/SwapTotal/ {print $2}' /proc/meminfo | awk '{print $1/1024}') MB total)"
   else
-    warn "Continuing without swap — the build may fail with OOM."
+    warn "Continuing without swap — the build may fail or hang with OOM."
   fi
 fi
 
@@ -195,11 +207,64 @@ EOF
 fi
 
 # ------------------------------------------------------------------------------
-# 5. Build & start
+# 4b. Choose the app image: prebuilt (GHCR) or local build
+#     A 512 MB VPS often cannot survive `next build` (needs 1–2 GB RAM).
+#     GitHub Actions builds the image on every push (.github/workflows/
+#     build.yml) — the VPS then only PULLS it. Local build stays the fallback.
 # ------------------------------------------------------------------------------
-say "Building the Docker image (5–15 min on a small VPS, grab a coffee)…"
-say "This also starts the Caddy HTTPS proxy (findlink-caddy container)."
-docker compose up -d --build
+IMAGE=""
+
+if [[ -n "$IMAGE_ARG" ]]; then
+  IMAGE="${IMAGE_ARG}"
+  ok "Using prebuilt image (from --image): ${IMAGE}"
+else
+  # Auto-detect from the git remote: https://github.com/OWNER/REPO(.git)
+  REMOTE="$(git remote get-url origin 2>/dev/null || true)"
+  if [[ "$REMOTE" =~ github\.com[:/]([^/]+)/([^/.]+) ]]; then
+    CANDIDATE="ghcr.io/${BASH_REMATCH[1],,}/${BASH_REMATCH[2],,}:latest"
+    if docker manifest inspect "$CANDIDATE" >/dev/null 2>&1; then
+      IMAGE="$CANDIDATE"
+      ok "Prebuilt image detected: ${IMAGE}"
+    else
+      say "No prebuilt image found at ${CANDIDATE}"
+      say "  (private repo? needs 'docker login ghcr.io' — or the GitHub Actions"
+      say "   build may still be running: repo → Actions tab → “Build Docker image”)"
+      if [[ "$UPDATE" != "true" ]] && ! confirm "Continue with a LOCAL build instead? (slow on 512 MB VPS)"; then
+        die "Re-run later: ./install.sh --image ${CANDIDATE}"
+      fi
+    fi
+  fi
+fi
+
+# Record the choice in .env (compose reads IMAGE from there)
+if [[ -n "$IMAGE" ]]; then
+  sed -i.bak "s|^IMAGE=.*|IMAGE=${IMAGE}|" "$ENV_FILE" 2>/dev/null || true
+  grep -q '^IMAGE=' "$ENV_FILE" || echo "IMAGE=${IMAGE}" >> "$ENV_FILE"
+  rm -f "${ENV_FILE}.bak"
+else
+  # local build mode — clear any stale IMAGE line
+  sed -i.bak "/^IMAGE=/d" "$ENV_FILE" 2>/dev/null || true
+  rm -f "${ENV_FILE}.bak"
+fi
+
+# ------------------------------------------------------------------------------
+# 5. Start (pull prebuilt image, or build locally)
+# ------------------------------------------------------------------------------
+if [[ -n "$IMAGE" ]]; then
+  say "Pulling prebuilt image: ${IMAGE}"
+  say "This also starts the Caddy HTTPS proxy (findlink-caddy container)."
+  if ! docker compose pull findlink; then
+    die "Could not pull ${IMAGE}.
+     Private image? Run:  docker login ghcr.io -u YOUR_USERNAME
+     (password = GitHub token with read:packages scope)"
+  fi
+  docker compose up -d --no-build
+else
+  say "Building the Docker image locally (10–30 min on a 512 MB VPS — it uses"
+  say "swap; 'stuck' output during 'npm run build' is normal, let it finish)."
+  say "This also starts the Caddy HTTPS proxy (findlink-caddy container)."
+  docker compose up -d --build
+fi
 
 ok "Containers started"
 
@@ -224,11 +289,17 @@ fi
 
 APP_URL_F="$(grep '^APP_URL=' "$ENV_FILE" | cut -d= -f2-)"
 CADDY_DOMAIN_F="$(grep '^CADDY_DOMAIN=' "$ENV_FILE" | cut -d= -f2-)"
+IMAGE_F="$(grep '^IMAGE=' "$ENV_FILE" | cut -d= -f2-)"
 echo ""
 echo -e "${BOLD}──────────────────────────────────────────────────────────${RESET}"
 echo -e " ${GREEN}FindLink is running${RESET}"
 echo -e ""
 echo -e "  URL           : ${BOLD}${APP_URL_F}${RESET}"
+if [[ -n "$IMAGE_F" ]]; then
+  echo -e "  Image         : ${DIM}${IMAGE_F} (prebuilt — VPS never builds)${RESET}"
+else
+  echo -e "  Image         : ${DIM}built locally from the Dockerfile${RESET}"
+fi
 if [[ -n "$CADDY_DOMAIN_F" ]]; then
   echo -e "  HTTPS         : ${DIM}automatic — certificate is issued as soon as DNS points${RESET}"
   echo -e "                  ${DIM}at this VPS (check: docker logs -f findlink-caddy)${RESET}"
@@ -245,6 +316,11 @@ echo -e "   ${CYAN}docker compose restart${RESET}            # restart"
 echo -e "   ${CYAN}./install.sh --update${RESET}              # update to latest version"
 echo -e "   ${CYAN}docker compose down${RESET}                # stop"
 echo -e ""
+if [[ -z "$IMAGE_F" ]]; then
+  echo -e " ${YELLOW}Tip (512 MB VPS):${RESET} avoid local builds entirely — push to GitHub and"
+  echo -e " deploy the prebuilt image: ${CYAN}./install.sh --image ghcr.io/YOU/findlink:latest${RESET}"
+  echo -e ""
+fi
 if [[ -z "${RESEND_KEY}" && ! -f .env.resend ]]; then
   echo -e " ${YELLOW}Next step:${RESET} add your Resend API key to ${BOLD}.env${RESET} then run"
   echo -e " ${CYAN}docker compose up -d${RESET} — email verification will then work."

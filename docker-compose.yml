@@ -1,5 +1,9 @@
 services:
   findlink:
+    # IMAGE is set in .env when using a prebuilt image (recommended for a
+    # 512 MB VPS — built by GitHub Actions, pushed to ghcr.io). Empty →
+    # the image is built locally from the Dockerfile and tagged findlink:local.
+    image: ${IMAGE:-findlink:local}
     build:
       context: .
       dockerfile: Dockerfile
