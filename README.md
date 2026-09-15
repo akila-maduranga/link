@@ -151,7 +151,10 @@ download, works on any tiny VPS:
    ./install.sh --image ghcr.io/YOUR_USERNAME/findlink:latest
    ```
 
-   (Plain `./install.sh` auto-detects the image for public repos, too.)
+   (Plain `./install.sh` auto-detects the image for public repos, too — and
+   remembers the choice in `.env`, so `./install.sh --update` keeps pulling
+   it. `./install.sh --build` switches back to local builds, and
+   `./install.sh --help` shows all options.)
 
 **Private repo?** The image is private as well — log in once on the VPS:
 
@@ -305,7 +308,8 @@ docker logs -f findlink           # follow live app logs
 docker logs -f findlink-caddy     # follow the HTTPS proxy / certificates
 docker compose restart            # restart
 docker compose down               # stop
-./install.sh --update             # pull latest code from GitHub + rebuild + restart
+./install.sh --update             # pull latest code + image (prebuilt mode) + restart
+./install.sh --help               # show all installer options
 ```
 
 ### Backup & restore the database
@@ -334,7 +338,7 @@ docker compose up -d
 | `ACME_EMAIL` | — | Optional email for Let's Encrypt expiry notices (also settable via `./install.sh --email …`) |
 | `APP_PORT` | — | Host port for **localhost-only** debug access (default `3000`); public traffic goes through Caddy on 80/443 |
 | `APP_BIND` | — | Default `127.0.0.1` (app private behind Caddy). `0.0.0.0` exposes it directly — not recommended |
-| `IMAGE` | — | Prebuilt app image (set automatically by `install.sh --image …`). Empty → build locally from the Dockerfile. Recommended for 512 MB VPSes |
+| `IMAGE` | — | Prebuilt app image — set automatically by `install.sh --image …` and remembered across updates. Empty → build locally from the Dockerfile (`./install.sh --build` resets it). Recommended for 512 MB VPSes |
 | `RESEND_API_KEY` | — | Resend API key. Without it, verification links are logged and shown in the UI (dev mode) |
 | `EMAIL_FROM` | — | `FindLink <noreply@findlink.site>` (requires a Resend-verified domain) |
 | `ALLOWED_EMAIL_DOMAINS` | — | New registrations limited to these email domains — default **Gmail + iCloud** (`gmail.com,googlemail.com,icloud.com,me.com,mac.com`). Set `*` to allow any |

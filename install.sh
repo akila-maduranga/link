@@ -20,9 +20,12 @@
 #      --image    NAME  Use a PREBUILT image instead of building on the VPS
 #                       (strongly recommended for 512 MB VPS — see README).
 #                       Auto-detected from your GitHub remote when possible.
+#      --build          Force a LOCAL build from the Dockerfile (slow on a
+#                       512 MB VPS) and forget a previously chosen prebuilt image
 #      --port     N     Host port for local debug access (default 3000)
-#      --update         Pull latest code, rebuild and restart (keeps .env & data)
+#      --update         Pull latest code + image, restart (keeps .env & data)
 #      --yes            Assume yes for prompts (non-interactive)
+#      --help           Show all options and exit
 # ==============================================================================
 set -euo pipefail
 
@@ -31,6 +34,36 @@ say()  { echo -e "${CYAN}▸${RESET} $*"; }
 ok()   { echo -e "${GREEN}✓${RESET} $*"; }
 warn() { echo -e "${YELLOW}!${RESET} $*"; }
 die()  { echo -e "${RED}✗ ERROR:${RESET} $*" >&2; exit 1; }
+show_help() {
+  cat <<'HELP'
+FindLink (findlink.site) — one-command installer
+
+USAGE
+  ./install.sh [options]            # run inside the cloned repository
+  curl -fsSL <install.sh URL> | bash -s -- --repo <git URL> [options]
+
+OPTIONS
+  --repo URL        Git repository to clone (required when piped via curl)
+  --domain FQDN     Your domain, e.g. findlink.site (APP_URL + automatic HTTPS)
+  --resend-key KEY  Resend API key for sending emails
+  --email ADDR      Let's Encrypt account email (expiry notices)
+  --image NAME      Deploy a PREBUILT image (e.g. ghcr.io/USER/findlink:latest)
+                    instead of building on the VPS — recommended for 512 MB.
+                    Auto-detected for GitHub clones; remembered in .env
+  --build           Force a LOCAL build from the Dockerfile and forget any
+                    previously chosen prebuilt image
+  --port N          Host port for local debug access (default 3000)
+  --update          Pull latest code + image (prebuilt mode) and restart
+  --yes, -y         Assume yes for prompts (non-interactive)
+  -h, --help        Show this help and exit
+
+EXAMPLES
+  ./install.sh --domain findlink.site --email you@example.com
+  ./install.sh --image ghcr.io/USER/findlink:latest --yes
+  ./install.sh --update            # keep settings, update the app, restart
+  ./install.sh --build             # force building locally
+HELP
+}
 banner() {
   echo -e "${BOLD}"
   echo "  ┌─────────────────────────────────────────────┐"
@@ -42,20 +75,25 @@ banner() {
   echo -e "${RESET}"
 }
 
-REPO_URL=""; DOMAIN=""; RESEND_KEY=""; ACME_EMAIL=""; IMAGE_ARG=""; PORT="3000"; ASSUME_YES="false"; UPDATE="false"
+REPO_URL=""; DOMAIN=""; RESEND_KEY=""; ACME_EMAIL=""; IMAGE_ARG=""; PORT="3000"; ASSUME_YES="false"; UPDATE="false"; FORCE_BUILD="false"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --repo) REPO_URL="$2"; shift 2 ;;
-    --domain) DOMAIN="$2"; shift 2 ;;
-    --resend-key) RESEND_KEY="$2"; shift 2 ;;
-    --email) ACME_EMAIL="$2"; shift 2 ;;
-    --image) IMAGE_ARG="$2"; shift 2 ;;
-    --port) PORT="$2"; shift 2 ;;
-    --update) UPDATE="true"; shift ;;
-    --yes|-y) ASSUME_YES="true"; shift ;;
-    *) die "Unknown option: $1" ;;
+    --repo)       [[ $# -ge 2 ]] || die "$1 needs a URL, e.g. https://github.com/USER/findlink.git"; REPO_URL="$2"; shift 2 ;;
+    --domain)     [[ $# -ge 2 ]] || die "$1 needs a domain, e.g. findlink.site"; DOMAIN="$2"; shift 2 ;;
+    --resend-key) [[ $# -ge 2 ]] || die "$1 needs a key value"; RESEND_KEY="$2"; shift 2 ;;
+    --email)      [[ $# -ge 2 ]] || die "$1 needs an email address"; ACME_EMAIL="$2"; shift 2 ;;
+    --image)      [[ $# -ge 2 ]] || die "$1 needs an image name, e.g. ghcr.io/USER/findlink:latest"; IMAGE_ARG="$2"; shift 2 ;;
+    --port)       [[ $# -ge 2 ]] || die "$1 needs a port number"; PORT="$2"; shift 2 ;;
+    --update)     UPDATE="true"; shift ;;
+    --build)      FORCE_BUILD="true"; shift ;;
+    --yes|-y)     ASSUME_YES="true"; shift ;;
+    -h|--help)    show_help; exit 0 ;;
+    *)            die "Unknown option: $1 — run ./install.sh --help for usage" ;;
   esac
 done
+if [[ -n "$IMAGE_ARG" && "$FORCE_BUILD" == "true" ]]; then
+  die "--image and --build cannot be combined — pick one"
+fi
 
 confirm() {
   [[ "$ASSUME_YES" == "true" ]] && return 0
@@ -211,12 +249,22 @@ fi
 #     A 512 MB VPS often cannot survive `next build` (needs 1–2 GB RAM).
 #     GitHub Actions builds the image on every push (.github/workflows/
 #     build.yml) — the VPS then only PULLS it. Local build stays the fallback.
+#     Precedence: --image > --build > sticky IMAGE from .env > auto-detect.
 # ------------------------------------------------------------------------------
+# A prebuilt image chosen on an earlier run is STICKY: re-runs and --update
+# keep pulling it (never silently fall back to a local OOM build). Override
+# with --image <new-ref>, or switch back to local builds with --build.
+PREBUILT_FROM_ENV="$(grep '^IMAGE=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
 IMAGE=""
 
 if [[ -n "$IMAGE_ARG" ]]; then
   IMAGE="${IMAGE_ARG}"
   ok "Using prebuilt image (from --image): ${IMAGE}"
+elif [[ "$FORCE_BUILD" == "true" ]]; then
+  ok "Local build forced (--build)"
+elif [[ -n "$PREBUILT_FROM_ENV" ]]; then
+  IMAGE="${PREBUILT_FROM_ENV}"
+  ok "Keeping prebuilt image chosen earlier: ${IMAGE}"
 else
   # Auto-detect from the git remote: https://github.com/OWNER/REPO(.git)
   REMOTE="$(git remote get-url origin 2>/dev/null || true)"
@@ -227,11 +275,10 @@ else
       ok "Prebuilt image detected: ${IMAGE}"
     else
       say "No prebuilt image found at ${CANDIDATE}"
-      say "  (private repo? needs 'docker login ghcr.io' — or the GitHub Actions"
-      say "   build may still be running: repo → Actions tab → “Build Docker image”)"
-      if [[ "$UPDATE" != "true" ]] && ! confirm "Continue with a LOCAL build instead? (slow on 512 MB VPS)"; then
-        die "Re-run later: ./install.sh --image ${CANDIDATE}"
-      fi
+      die "The GitHub Actions build may still be running (repo → Actions tab),
+     or the package is private (first run: docker login ghcr.io -u YOUR_USERNAME).
+   Once it is available:      ./install.sh --image ${CANDIDATE}
+   Or build locally instead:  ./install.sh --build   (slow on a 512 MB VPS)"
     fi
   fi
 fi
@@ -250,15 +297,26 @@ fi
 # ------------------------------------------------------------------------------
 # 5. Start (pull prebuilt image, or build locally)
 # ------------------------------------------------------------------------------
+# Forbid surprise local builds in prebuilt mode. Feature-detected because we
+# must not pass the flag to a compose plugin that doesn't know it.
+NO_BUILD=""
+if docker compose up --help 2>/dev/null | grep -q -- '--no-build'; then
+  NO_BUILD="--no-build"
+fi
+
 if [[ -n "$IMAGE" ]]; then
   say "Pulling prebuilt image: ${IMAGE}"
   say "This also starts the Caddy HTTPS proxy (findlink-caddy container)."
-  if ! docker compose pull findlink; then
+  # Plain `docker pull` (not `docker compose pull`): unambiguous and reliable
+  # even though the compose file also declares a build section for the service.
+  if ! docker pull "$IMAGE"; then
     die "Could not pull ${IMAGE}.
      Private image? Run:  docker login ghcr.io -u YOUR_USERNAME
-     (password = GitHub token with read:packages scope)"
+     (password = GitHub token with read:packages scope)
+     Or build locally instead: ./install.sh --build"
   fi
-  docker compose up -d --no-build
+  # NO_BUILD is either empty or a single word — intentionally unquoted
+  docker compose up -d ${NO_BUILD}
 else
   say "Building the Docker image locally (10–30 min on a 512 MB VPS — it uses"
   say "swap; 'stuck' output during 'npm run build' is normal, let it finish)."
@@ -287,9 +345,11 @@ else
   warn "Check status with:  docker logs -f findlink"
 fi
 
-APP_URL_F="$(grep '^APP_URL=' "$ENV_FILE" | cut -d= -f2-)"
-CADDY_DOMAIN_F="$(grep '^CADDY_DOMAIN=' "$ENV_FILE" | cut -d= -f2-)"
-IMAGE_F="$(grep '^IMAGE=' "$ENV_FILE" | cut -d= -f2-)"
+# NOTE: `|| true` inside each substitution — with `set -euo pipefail` a plain
+# `grep | cut` whose grep finds nothing would abort the whole script here.
+APP_URL_F="$(grep '^APP_URL=' "$ENV_FILE" | cut -d= -f2- || true)"
+CADDY_DOMAIN_F="$(grep '^CADDY_DOMAIN=' "$ENV_FILE" | cut -d= -f2- || true)"
+IMAGE_F="$(grep '^IMAGE=' "$ENV_FILE" | cut -d= -f2- || true)"
 echo ""
 echo -e "${BOLD}──────────────────────────────────────────────────────────${RESET}"
 echo -e " ${GREEN}FindLink is running${RESET}"
