@@ -1,0 +1,46 @@
+# ============================================================================
+#  FindLink — automatic reverse proxy + HTTPS (Caddy)
+#
+#  This file needs NO manual editing. It is mounted read-only into the
+#  Caddy container (service "caddy" in docker-compose.yml) and the site
+#  address is injected at start time from the DOMAIN environment variable:
+#
+#    • CADDY_DOMAIN=findlink.site in .env
+#        → https://findlink.site with a free Let's Encrypt certificate,
+#          issued and renewed automatically (ports 80 + 443 required)
+#
+#    • CADDY_DOMAIN empty in .env
+#        → plain HTTP on port 80 for any host — lets you use the site via
+#          the bare VPS IP while DNS is not set up yet
+#
+#  Cloudflare in front of this? It just works: CF-Connecting-IP and
+#  CF-IPCountry pass through untouched, which is what the app reads for
+#  visitor IPs and country tracking.
+# ============================================================================
+
+{
+	#ACME_EMAIL
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+{$DOMAIN} {
+	# Compress responses (skipped automatically when already compressed)
+	encode zstd gzip
+
+	header {
+		# Security headers
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# HSTS is uncommented by caddy-start.sh — only in domain mode, so
+		# browsers never get pinned to https://<bare VPS IP> during setup.
+		#HSTS Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	# Caddy automatically sets X-Forwarded-For / -Proto / -Host.
+	reverse_proxy findlink:3000
+}

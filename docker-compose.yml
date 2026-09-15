@@ -6,7 +6,10 @@ services:
     container_name: findlink
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-3000}:3000"
+      # Local debug access only (curl 127.0.0.1:3000/api/health on the VPS).
+      # The public entry point is the Caddy container on ports 80/443.
+      # Set APP_BIND=0.0.0.0 in .env if you really need direct exposure.
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
     env_file:
       - .env
     environment:
@@ -15,9 +18,10 @@ services:
       - NEXT_TELEMETRY_DISABLED=1
     volumes:
       - findlink-data:/app/db
-    # 512 MB VPS: hard cap slightly under system RAM so the kernel
-    # can still breathe; Node heap capped at 384 MB via NODE_OPTIONS.
-    mem_limit: 460m
+    # 512 MB VPS: Node heap capped at 384 MB; container caps stay under
+    # system RAM together with the 60 MB Caddy sidecar so the kernel can
+    # still breathe.
+    mem_limit: 450m
     memswap_limit: 1g
     logging:
       driver: json-file
@@ -37,5 +41,45 @@ services:
       retries: 3
       start_period: 30s
 
+  # ---------------------------------------------------------------------------
+  # Automatic HTTPS reverse proxy — zero configuration.
+  #
+  #   CADDY_DOMAIN=findlink.site (in .env) → Let's Encrypt certificate,
+  #   auto-issued & renewed, HTTP→HTTPS redirect, HTTP/3.
+  #   CADDY_DOMAIN empty                     → plain HTTP on port 80.
+  #
+  #   Needs host ports 80 + 443 free (stop any system nginx/apache/caddy).
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: findlink-caddy
+    restart: unless-stopped
+    depends_on:
+      - findlink
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      - DOMAIN=${CADDY_DOMAIN:-:80}
+      - ACME_EMAIL=${ACME_EMAIL:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/caddy-start.sh:/caddy-start.sh:ro
+      # TLS certificates + ACME account key survive rebuilds & updates
+      - caddy-data:/data
+      - caddy-config:/config
+    entrypoint: ["/bin/sh", "/caddy-start.sh"]
+    # ~15–40 MB resident — capped for the 512 MB budget
+    mem_limit: 60m
+    memswap_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
 volumes:
   findlink-data:
+  caddy-data:
+  caddy-config:

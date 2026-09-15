@@ -25,6 +25,7 @@ WhatsApp groups, Facebook pages and more — designed to run comfortably on a
 | **Detailed tracking** | Every click records country, browser, OS, device, referrer, bot status and unique visitor (salted IP hash) |
 | **Analytics dashboard** | Interactive charts: clicks over time, top countries, browsers, OS, devices, referrers, visitor quality |
 | **Email verification** | Transactional emails via [Resend](https://resend.com) with branded templates |
+| **Automatic HTTPS** | Built-in Caddy reverse proxy — free Let's Encrypt certificate for findlink.site, issued & renewed with zero configuration |
 | **Auth & security** | JWT sessions (httpOnly cookies), bcrypt passwords, zod validation, rate limiting, open-redirect protection, hashed IPs |
 | **Admin panel** | Platform stats, moderate listings (feature / hide / delete), recent users |
 | **Beautiful UI** | Dark/light themes, fully responsive, animated, accessible |
@@ -36,7 +37,7 @@ The **first account you register automatically becomes the ADMIN**.
 
 ## 📦 What you need before starting
 
-- A **VPS** with 512 MB+ RAM (Ubuntu 22.04/24.04 or Debian 12 recommended), root or sudo access
+- A **VPS** with 512 MB+ RAM (Ubuntu 22.04/24.04 or Debian 12 recommended), root or sudo access, with **ports 80 + 443** reachable (for automatic HTTPS)
 - Your domain **findlink.site** (point it to your VPS in Step 4)
 - A **GitHub** account (free) — the code is deployed from your own repo
 - 10 minutes of time
@@ -119,11 +120,17 @@ The installer automatically:
 2. ✅ creates a 1 GB **swap file** if your VPS has none (needed for the build on 512 MB),
 3. ✅ generates a secure `AUTH_SECRET` and writes your `.env` with
    `APP_URL=https://findlink.site`,
-4. ✅ builds and starts the container,
+4. ✅ builds and starts the containers,
 5. ✅ waits for the health check to pass.
 
-When you see **“FindLink is up and healthy!”**, open `http://YOUR_VPS_IP:3000`
-in your browser — your site is already live! 🎉
+When you see **“FindLink is up and healthy!”**, two containers are running:
+`findlink` (the app) and `findlink-caddy` (the HTTPS proxy). As soon as your
+DNS points at the VPS ([Step 4](#-step-4--connect-your-domain-findlinksite-2-min)),
+**https://findlink.site goes live with a real certificate — nothing else to
+configure.** 🎉
+
+> 🧪 Before DNS is ready you can sanity-check on the VPS itself:
+> `curl http://127.0.0.1:3000/api/health` → `{"ok":true…}`
 
 <details>
 <summary>Prefer doing it manually? (same result, 4 commands)</summary>
@@ -132,7 +139,7 @@ in your browser — your site is already live! 🎉
 git clone https://github.com/YOUR_USERNAME/findlink.git && cd findlink
 
 cp .env.example .env
-nano .env          # set AUTH_SECRET (openssl rand -hex 32) and APP_URL=https://findlink.site
+nano .env          # set AUTH_SECRET (openssl rand -hex 32); CADDY_DOMAIN=findlink.site is already there
 
 docker compose up -d --build
 docker logs -f findlink
@@ -156,41 +163,53 @@ it should answer with your VPS IP).
 
 ---
 
-### 🟢 Step 5 — Enable HTTPS (choose one, ~3 min)
+### 🟢 Step 5 — HTTPS: already on (nothing to do) ✨
 
-Pick **one** of the two options below. Option A also unlocks **country tracking**
-for your short links.
+Your deployment includes a **Caddy reverse proxy** (the `findlink-caddy`
+container) that took care of everything the moment DNS pointed at your VPS:
 
-#### Option A — Cloudflare (recommended: free SSL + geo-tracking)
+- ✅ free **Let's Encrypt certificate** for findlink.site — issued
+  automatically, renewed automatically (watch it happen:
+  `docker logs -f findlink-caddy`)
+- ✅ **HTTP → HTTPS redirect** on port 80
+- ✅ **HTTP/3**, gzip/zstd compression and security headers
+- ✅ the app container itself stays private (localhost-only) — all public
+  traffic goes through the proxy
+
+Open **https://findlink.site** — that's it.
+
+> Ports **80 and 443** must be reachable from the internet (on most VPS
+> providers they are by default; open them in your cloud firewall if you
+> have one).
+
+<details>
+<summary>🌐 Optional — put Cloudflare in front (free CDN + country tracking)</summary>
+
+Cloudflare is **not required** — but it adds a free CDN and enables the
+**country breakdown** in your short-link analytics (via the `CF-IPCountry`
+header, which passes through Caddy untouched):
 
 1. Create a free account at [cloudflare.com](https://cloudflare.com) and
    **Add a site** → `findlink.site` (Free plan).
-2. Cloudflare scans your DNS — keep the `A` record for `@` pointing at your VPS
-   (fix it if needed), then **Continue**.
+2. Keep the `A` record for `@` pointing at your VPS, then **Continue**.
 3. Change the **nameservers** of findlink.site at your registrar to the two
    Cloudflare nameservers it shows you.
 4. In Cloudflare → **SSL/TLS** → set mode to **Full (strict)**.
 5. In Cloudflare → **Network** → turn **IP Geolocation ON**.
-   FindLink will automatically read the `CF-IPCountry` header and fill the
-   **country breakdown** in short-link analytics.
 6. Make sure the DNS record for `@` has the **orange cloud** (proxied) enabled.
 
-#### Option B — Caddy on the VPS (automatic HTTPS, ~20 MB RAM)
+Certificate issuance keeps working through Cloudflare's proxy, and visitor
+IPs still reach the app correctly via `CF-Connecting-IP`.
 
-```bash
-apt install -y caddy
-printf 'findlink.site {\n    reverse_proxy 127.0.0.1:3000\n}\n' > /etc/caddy/Caddyfile
-caddy reload --config /etc/caddy/Caddyfile
-```
-
-Caddy obtains and renews a free Let's Encrypt certificate for findlink.site
-automatically. Ports 80 + 443 must be reachable from the internet.
+</details>
 
 ---
 
 ### 🟢 Step 6 — Create your admin account (~1 min)
 
-1. Open **https://findlink.site** (or `http://YOUR_VPS_IP:3000` if you skipped Step 5).
+1. Open **https://findlink.site** — the certificate was issued automatically
+   (if the browser still complains, give DNS a minute and reload; check
+   `docker logs findlink-caddy`).
 2. Click **Create account** and register.
 3. The **first account registered becomes the ADMIN** — that's you.
 4. Verify your email:
@@ -247,9 +266,10 @@ Done — new users now receive real verification and password-reset emails.
 ```bash
 cd ~/findlink                     # the repo lives here on your VPS
 
-docker logs -f findlink           # follow live logs
-docker compose restart            # restart the app
-docker compose down               # stop the app
+docker logs -f findlink           # follow live app logs
+docker logs -f findlink-caddy     # follow the HTTPS proxy / certificates
+docker compose restart            # restart
+docker compose down               # stop
 ./install.sh --update             # pull latest code from GitHub + rebuild + restart
 ```
 
@@ -275,7 +295,10 @@ docker compose up -d
 |----------|----------|-------------|
 | `AUTH_SECRET` | ✅ | Long random string — signs sessions & salts IP hashes. `openssl rand -hex 32` |
 | `APP_URL` | ✅ | Public URL used in emails & short links — `https://findlink.site` |
-| `APP_PORT` | — | Host port (default `3000`) |
+| `CADDY_DOMAIN` | — | Domain for the built-in Caddy proxy — `findlink.site` → automatic Let's Encrypt HTTPS. Empty → plain HTTP on port 80 |
+| `ACME_EMAIL` | — | Optional email for Let's Encrypt expiry notices (also settable via `./install.sh --email …`) |
+| `APP_PORT` | — | Host port for **localhost-only** debug access (default `3000`); public traffic goes through Caddy on 80/443 |
+| `APP_BIND` | — | Default `127.0.0.1` (app private behind Caddy). `0.0.0.0` exposes it directly — not recommended |
 | `RESEND_API_KEY` | — | Resend API key. Without it, verification links are logged and shown in the UI (dev mode) |
 | `EMAIL_FROM` | — | `FindLink <noreply@findlink.site>` (requires a Resend-verified domain) |
 
@@ -288,12 +311,14 @@ After editing `.env`, always run `docker compose up -d` to apply.
 | Symptom | Fix |
 |---------|-----|
 | Build fails with `Killed` (OOM) | The 512 MB VPS ran out of memory during the Docker build. The installer normally creates swap — check with `free -h`. If there's no swap: `fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`, then `docker compose up -d --build` again |
+| `port is already allocated` (80/443) | A system web server is running — stop it, the stack brings its own proxy: `systemctl disable --now caddy nginx apache2` then `docker compose up -d` |
+| `port is already allocated` (3000) | Another app uses port 3000 — set a different `APP_PORT` in `.env` and `docker compose up -d` |
+| https://findlink.site doesn't load | 1) DNS: `ping findlink.site` must answer with your VPS IP. 2) Ports 80 + 443 open in any cloud firewall. 3) `docker logs findlink-caddy` shows certificate issuance. Wait a minute and reload |
 | Prisma error about libssl/openssl | Build the provided `Dockerfile` unmodified (it already installs `openssl`) |
 | Emails not arriving | Check `RESEND_API_KEY`, a **verified findlink.site domain** in Resend, and `docker logs findlink` |
-| Country column shows “Unknown” | Enable **Cloudflare IP Geolocation** (Step 5, Option A) or front the app with a proxy that sets a country header |
+| Country column shows “Unknown” | Enable **Cloudflare IP Geolocation** (Step 5, optional Cloudflare section) or front the app with a proxy that sets a country header |
 | Forgot admin access | The first registered user is admin. If you lost it: `docker compose down`, rename the volume (`docker volume rm findlink-data` — ⚠️ deletes all data) and start fresh |
 | Health check pending | First boot syncs the database — give it ~30 s, watch `docker logs -f findlink` |
-| “Port is already allocated” | Another app uses port 3000 — set a different `APP_PORT` in `.env` and `docker compose up -d` |
 | Domain doesn't resolve | `ping findlink.site` — if it doesn't show your VPS IP, the A record from Step 4 isn't applied yet |
 
 ---
@@ -301,14 +326,23 @@ After editing `.env`, always run `docker compose up -d` to apply.
 ## 🧱 Architecture
 
 ```
-┌─────────────────────────────── Docker container (~180 MB) ─────────────────────────────┐
-│  FindLink — Next.js 16 (standalone build)                                              │
-│  ├─ UI: React 19 · Tailwind CSS 4 · shadcn/ui · Recharts                               │
-│  ├─ API routes: auth, links, shortlinks, stats, admin, health                          │
-│  ├─ Redirect engines: /s/:code (short links) · /go/:slug (directory click-through)     │
-│  ├─ SQLite via Prisma (file on a Docker volume — no separate DB process)               │
-│  └─ Click tracking: UA parsing, referrer domain, country via CDN headers, hashed IPs   │
-└────────────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────── Docker Compose stack (fits in 512 MB RAM) ────────────────┐
+│                                                                              │
+│  ┌─ findlink-caddy ─────────────────────────────────────────────────────┐   │
+│  │  Caddy reverse proxy — ports 80/443, automatic Let's Encrypt TLS,    │   │
+│  │  HTTP→HTTPS redirect, HTTP/3, compression, security headers (~20 MB) │   │
+│  └───────────────────────────┬──────────────────────────────────────────┘   │
+│                              │ internal network                             │
+│  ┌─ findlink (app) ──────────▼──────────────────────────────────────────┐   │
+│  │  Next.js 16 standalone (~180 MB image)                                │   │
+│  │  ├─ UI: React 19 · Tailwind CSS 4 · shadcn/ui · Recharts              │   │
+│  │  ├─ API routes: auth, links, shortlinks, stats, admin, health        │   │
+│  │  ├─ Redirect engines: /s/:code (short) · /go/:slug (directory)       │   │
+│  │  └─ SQLite via Prisma (file on a volume — no separate DB process)    │   │
+│  └─ localhost:3000 only — never exposed to the internet directly ───────┘   │
+│                                                                              │
+│  Volumes: findlink-data (SQLite) · caddy-data (TLS certificates)            │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 **Why this stack fits a 512 MB VPS**
@@ -318,7 +352,7 @@ After editing `.env`, always run `docker compose up -d` to apply.
 - In-memory sliding-window rate limiting — no Redis.
 - GeoIP via CDN request headers (Cloudflare) — no multi-megabyte GeoIP database.
 - Swap file (created by the installer) carries the Docker build through its memory peak.
-- Container memory capped at 460 MB with log rotation — the kernel always keeps breathing room.
+- Memory budget: app capped at 450 MB + Caddy at 60 MB, with log rotation — the kernel always keeps breathing room.
 
 ---
 
