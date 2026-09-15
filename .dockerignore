@@ -17,5 +17,8 @@ tests
 .zscripts
 worklog.md
 download
-scripts
 agent-ctx
+# scripts/ is build tooling — EXCEPT the prisma closure helper, which the
+# Dockerfile runs in the builder stage (must stay in the build context)
+scripts/*
+!scripts/prisma-closure.cjs

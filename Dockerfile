@@ -2,7 +2,8 @@
 
 # ==============================================================================
 # FindLink (findlink.site) — optimized for 512 MB VPS deployments
-# Multi-stage build: deps → builder → minimal runtime (~180 MB final image)
+# Multi-stage build: deps → builder → minimal runtime (~350 MB final image,
+# incl. the Node alpine base + a slim Prisma CLI for boot-time schema sync)
 # ==============================================================================
 
 # ---------- Stage 1: dependencies ----------
@@ -46,6 +47,17 @@ RUN npx prisma generate
 #                               instead of two (~100 MB less peak memory)
 RUN npm run build
 
+# Isolate the Prisma CLI + its full dependency closure for the runtime image.
+# prisma 6 needs @prisma/debug, @prisma/get-platform, @prisma/engines-version
+# and @prisma/fetch-engine as well — copying just prisma/ + @prisma/engines/
+# ships an image that crash-loops with: Cannot find module '@prisma/debug'.
+# The script also prunes query-engine dead weight (~100 MB) and fails loudly
+# if a future prisma version needs a package this doesn't know about.
+# @prisma/config is excluded: only loaded when a prisma.config.ts exists
+# (not in this repo) — it would drag in effect + typescript (~50 MB).
+RUN node scripts/prisma-closure.cjs --root /app/node_modules --out /prisma-cli \
+        --exclude @prisma/config
+
 # ---------- Stage 3: runtime ----------
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -65,10 +77,11 @@ COPY --from=builder --chown=findlink:findlink /app/.next/standalone ./
 COPY --from=builder --chown=findlink:findlink /app/.next/static ./.next/static
 COPY --from=builder --chown=findlink:findlink /app/public ./public
 
-# Prisma CLI + schema (for automatic schema sync on boot)
+# Prisma CLI + its full dependency closure (schema sync on boot), merged into
+# the standalone node_modules (COPY merges into the existing directory).
+# prisma/ + the schema are needed by docker-entrypoint.sh at every boot.
 COPY --from=builder --chown=findlink:findlink /app/prisma ./prisma
-COPY --from=builder --chown=findlink:findlink /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder --chown=findlink:findlink /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
+COPY --from=builder --chown=findlink:findlink /prisma-cli/node_modules ./node_modules
 RUN mkdir -p node_modules/.bin \
     && printf '#!/bin/sh\nexec node /app/node_modules/prisma/build/index.js "$@"\n' > node_modules/.bin/prisma \
     && chmod +x node_modules/.bin/prisma
