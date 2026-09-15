@@ -3,6 +3,7 @@ import { PLATFORMS } from "@/data/platforms"
 import { CATEGORIES } from "@/data/categories"
 import { COUNTRIES } from "@/data/countries"
 import { LANGUAGES } from "@/data/languages"
+import { emailDomainError, getAllowedEmailDomains, isAllowedEmail } from "@/lib/email-domains"
 
 const PLATFORM_IDS = PLATFORMS.map((p) => p.id) as [string, ...string[]]
 const CATEGORY_IDS = CATEGORIES.map((c) => c.id) as [string, ...string[]]
@@ -24,9 +25,20 @@ export const safeHttpUrl = z
     }
   }, "Enter a valid URL starting with http:// or https://")
 
+const REGISTER_ALLOWED_DOMAINS = getAllowedEmailDomains()
+
 export const registerSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters").max(40, "Name is too long"),
-  email: z.string().trim().toLowerCase().email("Enter a valid email address").max(254),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Enter a valid email address")
+    .max(254)
+    .refine(
+      (value) => isAllowedEmail(value, REGISTER_ALLOWED_DOMAINS),
+      emailDomainError(REGISTER_ALLOWED_DOMAINS) || "Email domain not allowed"
+    ),
   password: z
     .string()
     .min(8, "Password must be at least 8 characters")

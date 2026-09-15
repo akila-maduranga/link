@@ -8,9 +8,15 @@ import { AuthShell } from "@/components/auth/auth-shell"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { allowedDomainsLabel, emailDomainError, isAllowedEmail } from "@/lib/email-domains"
 import { toast } from "sonner"
 
-export function RegisterForm() {
+export function RegisterForm({
+  allowedDomains,
+}: {
+  /** Server-computed policy (null = no restriction) — keeps client and server in sync. */
+  allowedDomains: readonly string[] | null
+}) {
   const router = useRouter()
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
@@ -23,6 +29,11 @@ export function RegisterForm() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    const domainError = emailDomainError(allowedDomains)
+    if (domainError && !isAllowedEmail(email, allowedDomains)) {
+      setError(domainError)
+      return
+    }
     setLoading(true)
     try {
       const res = await fetch("/api/auth/register", {
@@ -119,9 +130,14 @@ export function RegisterForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            placeholder="you@gmail.com"
             className="rounded-xl"
           />
+          {allowedDomains && (
+            <p className="text-xs text-muted-foreground">
+              Only {allowedDomainsLabel(allowedDomains)} email addresses are accepted.
+            </p>
+          )}
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>

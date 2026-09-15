@@ -210,9 +210,14 @@ IPs still reach the app correctly via `CF-Connecting-IP`.
 1. Open **https://findlink.site** — the certificate was issued automatically
    (if the browser still complains, give DNS a minute and reload; check
    `docker logs findlink-caddy`).
-2. Click **Create account** and register.
+2. Click **Create account** and register with a **Gmail or iCloud email
+   address** (that's the signup policy — see `ALLOWED_EMAIL_DOMAINS` in
+   `.env` if you ever want to change it).
 3. The **first account registered becomes the ADMIN** — that's you.
-4. Verify your email:
+4. **Admin dashboard:** sign in, then click your avatar → **Admin**
+   (or go straight to `https://findlink.site/admin`) — platform stats,
+   moderate listings (feature / hide / delete) and recent users.
+5. Verify your email:
    - With Resend configured (Step 7) — click the link in the email you receive.
    - Without Resend — the verification link is shown directly on screen
      (and in `docker logs findlink`); just click it.
@@ -301,6 +306,7 @@ docker compose up -d
 | `APP_BIND` | — | Default `127.0.0.1` (app private behind Caddy). `0.0.0.0` exposes it directly — not recommended |
 | `RESEND_API_KEY` | — | Resend API key. Without it, verification links are logged and shown in the UI (dev mode) |
 | `EMAIL_FROM` | — | `FindLink <noreply@findlink.site>` (requires a Resend-verified domain) |
+| `ALLOWED_EMAIL_DOMAINS` | — | New registrations limited to these email domains — default **Gmail + iCloud** (`gmail.com,googlemail.com,icloud.com,me.com,mac.com`). Set `*` to allow any |
 
 After editing `.env`, always run `docker compose up -d` to apply.
 
@@ -359,6 +365,7 @@ After editing `.env`, always run `docker compose up -d` to apply.
 ## 🔒 Security notes
 
 - Passwords: bcrypt (10 rounds). Sessions: signed JWT in `httpOnly`, `sameSite=lax` cookies.
+- Registrations restricted to **Gmail and iCloud** email domains (server-enforced + form hint); configurable via `ALLOWED_EMAIL_DOMAINS`.
 - Short-link destinations are validated to `http`/`https` only — blocks `javascript:` and other scheme abuse.
 - Visitor IPs are **never stored raw** — a salted SHA-256 hash is kept for unique-visitor counts only.
 - Rate limits: login 10/10 min, registration 5/h, submissions 10/day, shortening 30/h per user, 60 clicks/min per IP per link.

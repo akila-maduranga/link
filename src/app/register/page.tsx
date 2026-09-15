@@ -1,10 +1,15 @@
 import { Suspense } from "react"
 import type { Metadata } from "next"
 import { RegisterForm } from "@/components/auth/register-form"
+import { getAllowedEmailDomains } from "@/lib/email-domains"
 
 export const metadata: Metadata = { title: "Create account" }
 
 export default function RegisterPage() {
+  // Computed on the server (env-aware) and passed down so the client-side
+  // hint + instant validation always match the server policy exactly.
+  const allowedDomains = getAllowedEmailDomains()
+
   return (
     <Suspense
       fallback={
@@ -13,7 +18,7 @@ export default function RegisterPage() {
         </div>
       }
     >
-      <RegisterForm />
+      <RegisterForm allowedDomains={allowedDomains} />
     </Suspense>
   )
 }
