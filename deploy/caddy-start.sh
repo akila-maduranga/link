@@ -29,4 +29,25 @@ case "${DOMAIN:-:80}" in
 *) sed -i "s|^\([[:space:]]*\)#HSTS |\1|" "$CONFIG" ;;
 esac
 
+# 3) www <-> apex canonical redirect. With a real domain, Caddy must serve
+#    BOTH hostnames or https://www.<domain> fails the TLS handshake with
+#    ERR_SSL_PROTOCOL_ERROR (the Caddyfile only lists the apex host, but
+#    DNS points www at the same VPS — README Step 4). Appending a redirect
+#    site block makes Caddy provision a free Let's Encrypt certificate for
+#    www as well and 301 every www URL to the canonical apex host, so short
+#    links and SEO stay consistent. Requires the www DNS record to point
+#    at this server (A or CNAME — both already work).
+case "${DOMAIN:-:80}" in
+:*) ;; # plain-HTTP mode — no canonical host, no redirect
+www.*)
+        # User made www the canonical host: redirect apex → www
+        apex="${DOMAIN#www.}"
+        printf '\n%s {\n\tredir https://www.%s{uri} permanent\n}\n' "$apex" "$apex" >> "$CONFIG"
+        ;;
+*)
+        # Canonical apex host: redirect www → apex
+        printf '\nwww.%s {\n\tredir https://%s{uri} permanent\n}\n' "$DOMAIN" "$DOMAIN" >> "$CONFIG"
+        ;;
+esac
+
 exec caddy run --config "$CONFIG" --adapter caddyfile

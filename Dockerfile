@@ -19,7 +19,22 @@ COPY prisma ./prisma
 ENV DATABASE_URL="file:/app/db/custom.db" \
     NEXT_TELEMETRY_DISABLED=1
 
-RUN npm ci --no-audit --no-fund
+# npm ci is the only build step that needs the network (the actual `next
+# build` below runs fully offline). GitHub-hosted runners occasionally drop
+# DNS/connectivity to registry.npmjs.org for a minute — 2026-09-16: "npm
+# error network … exit code 152" 31s into the install, during a GitHub
+# outage, on the first uncached run after the node:22 base switch. npm's
+# built-in retries give up after ~30s, so wrap it: 5 attempts with growing
+# pauses. A transient blip then costs a minute, not a red CI run.
+RUN for i in 1 2 3 4 5; do \
+      npm ci --no-audit --no-fund --fetch-retries=3 \
+        --fetch-retry-mintimeout=10000 --fetch-retry-maxtimeout=60000 \
+        --fetch-timeout=300000 \
+      && break; \
+      if [ "$i" -eq 5 ]; then echo "ERROR: npm ci failed 5 times — is registry.npmjs.org reachable?"; exit 1; fi; \
+      echo "npm ci attempt $i/5 failed — retrying in $((i * 20))s"; \
+      sleep $((i * 20)); \
+    done
 
 # ---------- Stage 2: build ----------
 FROM node:22-alpine AS builder
@@ -28,10 +43,13 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# No AUTH_SECRET here: the app reads it at RUNTIME (from .env via compose
+# env_file), never at build time — verified: a clean build succeeds without
+# it, and baking a placeholder only triggers BuildKit's
+# SecretsUsedInArgOrEnv warning on every CI run.
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     DATABASE_URL="file:/app/db/custom.db" \
-    AUTH_SECRET="build-time-placeholder-secret-value-0123456789" \
     NODE_OPTIONS="--max-old-space-size=512" \
     TURBOPACK_MEMORY_LIMIT=1024 \
     NEXT_TURBOPACK_USE_WORKER=0

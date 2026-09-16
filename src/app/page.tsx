@@ -3,8 +3,8 @@ import {
   ArrowRight,
   BarChart3,
   Globe2,
-  Layers,
   Link2,
+  Lock,
   MousePointerClick,
   Rocket,
   Search,
@@ -14,6 +14,7 @@ import {
   Zap,
 } from "lucide-react"
 import { db } from "@/lib/db"
+import { getSession } from "@/lib/auth"
 import { LinkCard } from "@/components/links/link-card"
 import { formatCount } from "@/lib/format"
 import { ShortenForm } from "@/components/shortener/shorten-form"
@@ -50,6 +51,9 @@ async function getLandingData() {
 
 export default async function HomePage() {
   const stats = await getLandingData()
+  // Signed-in visitors never see "create account" marketing — they get a
+  // straight path back into the product.
+  const session = await getSession()
 
   return (
     <div className="flex flex-col">
@@ -79,7 +83,7 @@ export default async function HomePage() {
             </p>
 
             <div className="animate-in fade-in slide-in-from-bottom-5 mx-auto mt-10 max-w-xl duration-700">
-              <ShortenForm variant="hero" />
+              <ShortenForm variant="hero" serverSession={session ? { verified: session.verified } : null} />
             </div>
           </div>
 
@@ -154,8 +158,9 @@ export default async function HomePage() {
             <Rocket className="mx-auto h-10 w-10 text-primary" />
             <h3 className="mt-4 text-lg font-semibold">The directory is warming up</h3>
             <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-              No listings yet. Create an account and be the very first to share a community —
-              it takes less than a minute.
+              {session
+                ? "No listings yet. Be the very first to share a community — it takes less than a minute."
+                : "No listings yet. Create an account and be the very first to share a community — it takes less than a minute."}
             </p>
             <Button asChild className="mt-6 rounded-xl font-semibold">
               <Link href="/dashboard/submit" className="gap-2">
@@ -171,11 +176,11 @@ export default async function HomePage() {
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Packed with features, light on resources
+              Packed with features, effortless to use
             </h2>
             <p className="mt-3 text-sm text-muted-foreground sm:text-base">
-              Everything you need to run a professional link hub — designed to run smoothly
-              even on a tiny 512 MB server.
+              Everything you need to run a professional link hub — fast, reliable and free
+              to start.
             </p>
           </div>
 
@@ -203,19 +208,19 @@ export default async function HomePage() {
                 icon: Globe2,
                 title: "Global by default",
                 description:
-                  "250+ countries, 25 categories and 27 languages with flag badges. Geo-detection on short links via CDN headers — no heavy GeoIP databases.",
+                  "250+ countries, 25 categories and 27 languages with flag badges — and click analytics that show exactly where your audience lives.",
               },
               {
                 icon: ShieldCheck,
                 title: "Verified & moderated",
                 description:
-                  "Email verification via Resend keeps submissions trustworthy. Admins can feature great listings and hide abuse in one click.",
+                  "Every submission is email-verified and reviewed. Great listings get featured, abuse gets removed in one click.",
               },
               {
-                icon: Layers,
-                title: "Self-hosted & private",
+                icon: Lock,
+                title: "Private by design",
                 description:
-                  "Your data stays on your server. IPs are salted-hashed for unique counts, never stored raw. Deploy with one Docker command.",
+                  "Visitor IPs are anonymized for unique-click counts and never stored raw. You get honest analytics while your audience stays respected.",
               },
             ].map((feature) => (
               <div
@@ -278,18 +283,27 @@ export default async function HomePage() {
         <div className="bg-grid relative overflow-hidden rounded-3xl border border-primary/25 bg-primary/5 px-6 py-14 text-center sm:px-12">
           <div className="pointer-events-none absolute -top-24 left-1/2 h-48 w-96 -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />
           <h2 className="relative text-2xl font-bold tracking-tight sm:text-4xl">
-            Ready to grow your community?
+            {session ? "Your links are waiting" : "Ready to grow your community?"}
           </h2>
           <p className="relative mx-auto mt-4 max-w-xl text-sm text-muted-foreground sm:text-base">
-            Join FindLink today — list your groups, shorten your links and get analytics that
-            actually tell you where your audience lives.
+            {session
+              ? "Pick up where you left off — manage your links, check today's clicks and keep growing."
+              : "Join FindLink today — list your groups, shorten your links and get analytics that actually tell you where your audience lives."}
           </p>
           <div className="relative mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button asChild size="lg" className="rounded-xl px-8 text-base font-semibold glow">
-              <Link href="/register" className="gap-2">
-                Create free account <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
+            {session ? (
+              <Button asChild size="lg" className="rounded-xl px-8 text-base font-semibold glow">
+                <Link href="/dashboard" className="gap-2">
+                  Go to your dashboard <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild size="lg" className="rounded-xl px-8 text-base font-semibold glow">
+                <Link href="/register" className="gap-2">
+                  Create free account <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
             <Button asChild size="lg" variant="outline" className="rounded-xl px-8">
               <Link href="/explore">Browse the directory</Link>
             </Button>

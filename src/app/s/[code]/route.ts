@@ -5,6 +5,7 @@ import { parseUserAgent } from "@/lib/ua"
 import { clientIp, rateLimit } from "@/lib/rate-limit"
 import { hashIp, referrerDomain } from "@/lib/slug"
 import { countryFromHeaders, safeExternalUrl } from "@/lib/api"
+import { lookupCountry } from "@/lib/geoip"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -79,11 +80,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
         try {
           const ua = request.headers.get("user-agent")
           const parsed = parseUserAgent(ua)
+          // Country: exact CDN/proxy header first (Cloudflare etc.), then a
+          // cached GeoIP lookup (geojs → ipwho.is → ip-api). This runs AFTER
+          // the redirect was already sent — the visitor never waits on it.
+          const country = countryFromHeaders(request) ?? (await lookupCountry(ip))
           await db.shortLinkEvent.create({
             data: {
               shortLinkId: link.id,
               ipHash: ip === "unknown" ? null : hashIp(ip),
-              country: countryFromHeaders(request),
+              country,
               referrer: referrerDomain(request.headers.get("referer")),
               browser: parsed.browser,
               os: parsed.os,

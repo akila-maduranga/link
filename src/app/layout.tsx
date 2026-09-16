@@ -7,6 +7,7 @@ import { Navbar } from "@/components/site/navbar"
 import { Footer } from "@/components/site/footer"
 import { ThemeProvider } from "next-themes"
 import { Toaster } from "@/components/ui/sonner"
+import { getSession } from "@/lib/auth"
 
 const appUrl = process.env.APP_URL || "https://findlink.site"
 
@@ -50,11 +51,29 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Session-aware shell: logged-in visitors see dashboard links from the very
+  // first paint (no login/signup flash), guests see the marketing CTAs.
+  // Every route is already dynamically rendered (per-request CSP nonces),
+  // so reading the cookie here adds no static/dynamic conflict.
+  const session = await getSession()
+  const navbarUser = session
+    ? {
+        id: session.sub,
+        name: session.name,
+        email: session.email,
+        role: session.role,
+        emailVerified: session.verified,
+        // Premium entitlement needs a DB read — the navbar client refines
+        // this via /api/auth/me immediately after mount.
+        isPremium: undefined,
+      }
+    : null
+
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased bg-background text-foreground">
@@ -67,9 +86,9 @@ gtag('config', '${GA_ID}');`}
         </Script>
         <ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
           <div className="flex min-h-screen flex-col">
-            <Navbar />
+            <Navbar initialUser={navbarUser} />
             <main className="flex-1">{children}</main>
-            <Footer />
+            <Footer authed={!!session} />
           </div>
           <Toaster richColors position="bottom-right" />
         </ThemeProvider>

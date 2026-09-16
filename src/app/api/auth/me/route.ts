@@ -24,7 +24,7 @@ export async function GET() {
   })
   if (!user) return ok({ user: null })
 
-  const premium = isPremiumActive(user.premiumUntil)
+  const premium = isPremiumActive(user.premiumUntil, user.role)
   const trackableUsed = await db.shortLink.count({
     where: { userId: session.sub, trackable: true },
   })

@@ -31,15 +31,23 @@ const NAV_LINKS = [
   { href: "/explore", label: "Explore" },
 ]
 
-export function Navbar() {
-  const [user, setUser] = useState<SessionUser | null>(null)
-  const [loaded, setLoaded] = useState(false)
+/**
+ * initialUser comes from the server-rendered layout (root layout reads the
+ * session cookie) so the very first paint already shows the right buttons —
+ * no skeleton flash, no guest buttons blinking for logged-in users. The
+ * pathname effect below keeps it fresh after login/logout navigations.
+ */
+export function Navbar({ initialUser = undefined }: { initialUser?: SessionUser | null }) {
+  const [user, setUser] = useState<SessionUser | null>(initialUser ?? null)
+  const [loaded, setLoaded] = useState(initialUser !== undefined)
   const [mobileOpen, setMobileOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
 
   useEffect(() => {
     let active = true
+    // Re-sync with the server on every navigation: catches login/logout
+    // (router.push changes the pathname) and refreshes premium state.
     fetch("/api/auth/me")
       .then((r) => r.json())
       .then((data) => {
@@ -48,7 +56,9 @@ export function Navbar() {
           setLoaded(true)
         }
       })
-      .catch(() => setLoaded(true))
+      .catch(() => {
+        if (active) setLoaded(true)
+      })
     return () => {
       active = false
     }

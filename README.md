@@ -194,6 +194,12 @@ In your domain registrar's DNS settings (where you bought findlink.site):
 Wait a minute or two for DNS to propagate (check with `ping findlink.site` —
 it should answer with your VPS IP).
 
+> **Both records matter.** The `www` CNAME is not optional cosmetics: with it
+> in place, the built-in Caddy proxy holds a certificate for **both** hostnames
+> and 301-redirects every `www.findlink.site/...` URL to the canonical
+> `findlink.site/...` (short links and SEO stay consistent). Without it,
+> `https://www.findlink.site` fails with `ERR_SSL_PROTOCOL_ERROR`.
+
 ---
 
 ### 🟢 Step 5 — HTTPS: already on (nothing to do) ✨
@@ -216,11 +222,13 @@ Open **https://findlink.site** — that's it.
 > have one).
 
 <details>
-<summary>🌐 Optional — put Cloudflare in front (free CDN + country tracking)</summary>
+<summary>🌐 Optional — put Cloudflare in front (free CDN + instant country header)</summary>
 
-Cloudflare is **not required** — but it adds a free CDN and enables the
-**country breakdown** in your short-link analytics (via the `CF-IPCountry`
-header, which passes through Caddy untouched):
+Cloudflare is **not required** — country analytics work out of the box via
+built-in GeoIP lookups (see the `GEOIP` env var). Cloudflare adds a free CDN
+and makes the country header (`CF-IPCountry`) instant and exact when proxied
+through it (the header passes through Caddy untouched and takes priority
+over the GeoIP lookups):
 
 1. Create a free account at [cloudflare.com](https://cloudflare.com) and
    **Add a site** → `findlink.site` (Free plan).
@@ -389,7 +397,8 @@ docker compose up -d
 |----------|----------|-------------|
 | `AUTH_SECRET` | ✅ | Long random string — signs sessions & salts IP hashes. `openssl rand -hex 32` |
 | `APP_URL` | ✅ | Public URL used in emails & short links — `https://findlink.site` |
-| `CADDY_DOMAIN` | — | Domain for the built-in Caddy proxy — `findlink.site` → automatic Let's Encrypt HTTPS. Empty → plain HTTP on port 80 |
+| `CADDY_DOMAIN` | — | Domain for the built-in Caddy proxy — `findlink.site` → automatic Let's Encrypt HTTPS (**including a `www.` → apex 301 redirect**). Empty → plain HTTP on port 80 |
+| `GEOIP` | — | Country accuracy for click analytics. Default: on — resolves visitor IPs via free keyless GeoIP services (geojs.io → ipwho.is → ip-api.com, cached, rate-capped). Set `off` to record no country |
 | `ACME_EMAIL` | — | Optional email for Let's Encrypt expiry notices (also settable via `./install.sh --email …`) |
 | `APP_PORT` | — | Host port for **localhost-only** debug access (default `3000`); public traffic goes through Caddy on 80/443 |
 | `APP_BIND` | — | Default `127.0.0.1` (app private behind Caddy). `0.0.0.0` exposes it directly — not recommended |
@@ -418,10 +427,11 @@ After editing `.env`, always run `docker compose up -d` to apply.
 | `port is already allocated` (80/443) | A system web server is running — stop it, the stack brings its own proxy: `systemctl disable --now caddy nginx apache2` then `docker compose up -d` |
 | `port is already allocated` (3000) | Another app uses port 3000 — set a different `APP_PORT` in `.env` and `docker compose up -d` |
 | https://findlink.site doesn't load | 1) DNS: `ping findlink.site` must answer with your VPS IP. 2) Ports 80 + 443 open in any cloud firewall. 3) `docker logs findlink-caddy` shows certificate issuance. Wait a minute and reload |
+| https://**www**.findlink.site gives `ERR_SSL_PROTOCOL_ERROR` | The www DNS record must point at the VPS (Step 4), and the Caddy container must run the updated start script: `docker restart findlink-caddy`, then give it ~a minute to issue the www certificate (`docker logs findlink-caddy`) |
 | Prisma error about libssl/openssl | Build the provided `Dockerfile` unmodified (it already installs `openssl`) |
 | App keeps restarting: `Cannot find module '@prisma/…'` (`@prisma/debug`, `@prisma/config`, …) | Your image predates the fixed Dockerfile — its runtime stage shipped an incomplete Prisma CLI closure (prisma 6.19 eagerly requires `@prisma/config` + its dependency tree at startup). Fix: update the repo files (`Dockerfile`, `.dockerignore`, `scripts/prisma-closure.cjs` — re-uploading the zip's `findlink/` folder over your clone is easiest), `git push`, wait for the **Actions** build to go green, then `./install.sh --update` |
 | Emails not arriving | Check `RESEND_API_KEY`, a **verified findlink.site domain** in Resend, and `docker logs findlink` |
-| Country column shows “Unknown” | Enable **Cloudflare IP Geolocation** (Step 5, optional Cloudflare section) or front the app with a proxy that sets a country header |
+| Country column shows “Unknown” | Works out of the box now — each visitor IP is resolved via free GeoIP services (cached 30 days). Notes: only clicks **after** the update get a country (old rows can't be back-filled — raw IPs are never stored), and `GEOIP=off` in `.env` disables it. Behind Cloudflare with IP Geolocation on, the exact `CF-IPCountry` header is used instead |
 | Forgot admin access | The first registered user is admin. If you lost it: `docker compose down`, rename the volume (`docker volume rm findlink-data` — ⚠️ deletes all data) and start fresh |
 | Health check pending | First boot syncs the database — give it ~30 s, watch `docker logs -f findlink` |
 | Domain doesn't resolve | `ping findlink.site` — if it doesn't show your VPS IP, the A record from Step 4 isn't applied yet |

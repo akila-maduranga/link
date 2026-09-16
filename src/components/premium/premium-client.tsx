@@ -24,6 +24,7 @@ interface Me {
     id: string
     name: string
     email: string
+    role: string
     emailVerified: boolean
     isPremium: boolean
     premiumUntil: string | null
@@ -55,35 +56,66 @@ declare global {
 /* ----------------------------- SDK script load ----------------------------- */
 
 /**
- * Load the PayPal JS SDK at runtime from the public client id served by
- * /api/paypal/config (works with credentials added to .env AFTER the image
- * was built — no rebuild needed). Sandbox mode uses the sandbox host.
- * Under the site's nonce+strict-dynamic CSP, a script injected via
- * createElement is allowed and propagates trust to its children.
+ * Module-level SDK load state — ONE injection per browser page, shared across
+ * SPA remounts of this component. Three silent-failure classes are handled:
+ *
+ *  1. A script tag that FAILED earlier must not poison later attempts: the
+ *     tag is removed and the cache reset, so the next visit (or the Retry
+ *     button) injects a fresh one. (The previous implementation attached
+ *     load/error listeners to an already-finished tag — events that never
+ *     fire — leaving the checkout stuck on "Loading…" forever.)
+ *  2. HTTP 200 with no window.paypal.Buttons (bad client id, or a client id
+ *     from the wrong PAYPAL_MODE) is an ERROR, not "ready" — it used to
+ *     leave a permanently empty button area with no message.
+ *  3. If the SDK is somehow already on the page, never inject a second copy
+ *     (loading the PayPal SDK twice breaks it).
  */
+let sdkLoadPromise: Promise<void> | null = null
+
 function loadPayPalSdk(clientId: string, currency: string, mode: string): Promise<void> {
+  if (typeof window.paypal?.Buttons === "function") return Promise.resolve()
+  if (sdkLoadPromise) return sdkLoadPromise
+
   const host = mode === "sandbox" ? "https://www.sandbox.paypal.com" : "https://www.paypal.com"
   const src = `${host}/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${encodeURIComponent(currency)}&intent=capture&components=buttons`
 
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[data-paypal-sdk="1"]`)
-    if (existing) {
-      if (existing.dataset.loaded === "1") return resolve()
-      existing.addEventListener("load", () => resolve(), { once: true })
-      existing.addEventListener("error", () => reject(new Error("PayPal SDK failed to load")), { once: true })
-      return
-    }
+  sdkLoadPromise = new Promise<void>((resolve, reject) => {
+    // Always start from a clean slate (removes tags left by failed attempts)
+    document.querySelector('script[data-paypal-sdk="1"]')?.remove()
+
     const script = document.createElement("script")
     script.src = src
     script.async = true
     script.dataset.paypalSdk = "1"
     script.addEventListener("load", () => {
-      script.dataset.loaded = "1"
-      resolve()
+      if (typeof window.paypal?.Buttons === "function") {
+        script.dataset.loaded = "1"
+        resolve()
+        return
+      }
+      // 200 OK but the SDK did not boot — bad client id / mode mismatch.
+      // (Admin diagnostic: the PayPal client id must match the configured
+      // mode — sandbox credentials only work in sandbox mode. End users get
+      // a plain message; details belong in server logs, not the UI.)
+      script.remove()
+      reject(
+        new Error(
+          "PayPal checkout failed to initialize. This is a server configuration issue — please try again later."
+        )
+      )
     })
-    script.addEventListener("error", () => reject(new Error("PayPal SDK failed to load")), { once: true })
+    script.addEventListener("error", () => {
+      script.remove()
+      reject(new Error("Could not download the PayPal checkout script — check your connection."))
+    })
     document.head.appendChild(script)
   })
+
+  // A failed load must not poison the next attempt — clear the shared cache.
+  void sdkLoadPromise.catch(() => {
+    sdkLoadPromise = null
+  })
+  return sdkLoadPromise
 }
 
 function fmtDate(iso: string): string {
@@ -107,9 +139,10 @@ export function PremiumClient() {
   const [me, setMe] = useState<Me["user"]>(null)
   const [meLoaded, setMeLoaded] = useState(false)
   const [phase, setPhase] = useState<Phase>("loading")
+  const [sdkError, setSdkError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const buttonsRef = useRef<HTMLDivElement | null>(null)
-  const renderedRef = useRef(false)
 
   const refreshMe = useCallback(async () => {
     try {
@@ -126,6 +159,8 @@ export function PremiumClient() {
   useEffect(() => {
     refreshMe()
     let active = true
+    setPhase("loading")
+    setSdkError(null)
     fetch("/api/paypal/config")
       .then((r) => r.json())
       .then(async (cfg: PayPalConfig) => {
@@ -139,27 +174,40 @@ export function PremiumClient() {
         if (!active) return
         setPhase("ready")
       })
-      .catch(() => {
-        if (active) setPhase("sdk-error")
+      .catch((err: unknown) => {
+        if (!active) return
+        setSdkError(err instanceof Error ? err.message : "Unknown error loading checkout")
+        setPhase("sdk-error")
       })
     return () => {
       active = false
     }
-  }, [refreshMe])
+  }, [refreshMe, attempt]) // attempt++ via the Retry button re-runs the bootstrap
 
-  // Render PayPal buttons once the SDK + session state are known.
+  // Render PayPal buttons once the SDK AND the session state are known.
+  // BOTH must be in the deps: on an SPA revisit the SDK resolves from cache
+  // almost instantly while /api/auth/me is still in flight — if this effect
+  // ran only on phase changes, the container would not exist yet and the
+  // effect would silently skip, leaving a permanently empty checkout area
+  // (the "PayPal window loaded once and then never again" bug).
+  const canCheckout = meLoaded && !!me?.emailVerified
+
   useEffect(() => {
-    if (phase !== "ready" || !config) return
+    if (phase !== "ready" || !config || !canCheckout) return
     const target = buttonsRef.current
-    if (!target || renderedRef.current || !window.paypal?.Buttons) return
-    renderedRef.current = true
+    if (!target || typeof window.paypal?.Buttons !== "function") return
 
+    let cancelled = false
     const buttons = window.paypal.Buttons({
       style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
       createOrder: async () => {
         const res = await fetch("/api/paypal/create-order", { method: "POST" })
-        const data = await res.json()
+        const data = (await res.json().catch(() => ({}))) as { orderId?: string; error?: string }
         if (!res.ok || !data.orderId) {
+          // When createOrder fails the popup never opens and PayPal shows
+          // NOTHING — surface the server's reason (rate limit, PayPal
+          // outage, expired session) instead of a dead silent button.
+          toast.error(data.error ?? "Could not start the checkout. Please try again.")
           throw new Error(data.error ?? "Could not start the checkout")
         }
         return data.orderId as string
@@ -197,18 +245,26 @@ export function PremiumClient() {
 
     buttons.render(target).catch((err: unknown) => {
       console.error("[premium] PayPal buttons render failed:", err)
+      if (!cancelled) {
+        setSdkError("The checkout buttons could not be rendered.")
+        setPhase("sdk-error")
+      }
     })
 
     return () => {
+      cancelled = true
       buttons.close?.().catch(() => undefined)
     }
-  }, [phase, config, refreshMe])
+  }, [phase, config, canCheckout, refreshMe])
 
   /* ------------------------------- renderings ------------------------------ */
 
   const user = me
   const loggedIn = meLoaded && !!user
   const premium = user?.isPremium ?? false
+  // Admins are premium by default, forever — even when the DB carries a
+  // far-future expiry from the install bootstrap, never show a renewal date.
+  const foreverPremium = premium && (!user?.premiumUntil || user?.role === "ADMIN")
 
   return (
     <section id="checkout" className="mx-auto mt-12 max-w-md scroll-mt-24" aria-label="Checkout">
@@ -223,23 +279,31 @@ export function PremiumClient() {
           <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Checking your plan…
           </div>
-        ) : premium && user?.premiumUntil ? (
+        ) : premium ? (
           <div className="text-center">
             <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-semibold text-primary">
               <Crown className="h-4 w-4" /> Premium active
             </span>
-            <p className="mt-3 text-sm text-muted-foreground">
-              Active until{" "}
-              <strong className="text-foreground">{fmtDate(user.premiumUntil)}</strong>
-              {daysLeft(user.premiumUntil) <= 7 && (
-                <span className="ml-1 text-amber-500">
-                  ({daysLeft(user.premiumUntil)} {daysLeft(user.premiumUntil) === 1 ? "day" : "days"} left)
-                </span>
-              )}
-            </p>
-            <p className="mt-1.5 text-xs text-muted-foreground/70">
-              Paying again stacks — each payment adds {config?.days ?? 30} more days.
-            </p>
+            {user?.premiumUntil && !foreverPremium ? (
+              <>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Active until{" "}
+                  <strong className="text-foreground">{fmtDate(user.premiumUntil)}</strong>
+                  {daysLeft(user.premiumUntil) <= 7 && (
+                    <span className="ml-1 text-amber-500">
+                      ({daysLeft(user.premiumUntil)} {daysLeft(user.premiumUntil) === 1 ? "day" : "days"} left)
+                    </span>
+                  )}
+                </p>
+                <p className="mt-1.5 text-xs text-muted-foreground/70">
+                  Paying again stacks — each payment adds {config?.days ?? 30} more days.
+                </p>
+              </>
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Premium is included with your account — no renewal needed.
+              </p>
+            )}
           </div>
         ) : (
           <div className="text-center">
@@ -280,20 +344,32 @@ export function PremiumClient() {
                 <Link href="/dashboard/settings">Resend verification</Link>
               </Button>
             </div>
+          ) : premium && !foreverPremium ? (
+            /* Forever-premium accounts (admins) never need to pay. */
+            <p className="rounded-lg bg-primary/5 px-3.5 py-3 text-center text-sm text-muted-foreground">
+              You&apos;re all set — premium is included with your account, no payment needed.
+            </p>
           ) : phase === "not-configured" ? (
             <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-6 text-center">
               <p className="text-sm font-medium">Payments coming soon</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                PayPal checkout isn&apos;t configured on this server yet. The site admin can
-                enable it by setting PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.
+                Online checkout isn&apos;t available on this server yet — please check back
+                soon.
               </p>
             </div>
           ) : phase === "sdk-error" ? (
             <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-6 text-center">
               <p className="text-sm font-medium">Could not load PayPal checkout</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Check your connection and reload the page, then try again.
+                {sdkError ?? "Check your connection, then try again."}
               </p>
+              <Button
+                variant="outline"
+                className="mt-4 rounded-xl"
+                onClick={() => setAttempt((a) => a + 1)}
+              >
+                <Loader2 className="mr-2 h-4 w-4" /> Retry loading checkout
+              </Button>
             </div>
           ) : (
             /* PayPal Smart Payment Buttons mount here */

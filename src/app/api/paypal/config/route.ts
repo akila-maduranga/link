@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic"
  */
 export async function GET() {
   const enabled = paypalConfigured()
-  return ok({
+  const response = ok({
     enabled,
     clientId: enabled ? process.env.PAYPAL_CLIENT_ID : null,
     mode: paypalMode(),
@@ -23,4 +23,9 @@ export async function GET() {
     days: premiumDays(),
     freeTrackableLimit: FREE_TRACKABLE_LIMIT,
   })
+  // This flips from "coming soon" to live the moment credentials land in
+  // .env — a heuristically cached "not configured" response would keep the
+  // checkout disabled in the user's browser until a hard reload.
+  response.headers.set("Cache-Control", "no-store")
+  return response
 }

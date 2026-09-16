@@ -10,6 +10,12 @@ import { cn } from "@/lib/utils"
 interface ShortenFormProps {
   variant?: "hero" | "dashboard"
   className?: string
+  /**
+   * Server-rendered session snapshot (from the page's getSession()) so the
+   * hero hint shows the right copy on the FIRST paint — no guest→authed
+   * flash while /api/auth/me resolves. undefined = unknown (fetch as before).
+   */
+  serverSession?: { verified: boolean } | null
 }
 
 interface SessionUser {
@@ -19,12 +25,18 @@ interface SessionUser {
   emailVerified: boolean
 }
 
-export function ShortenForm({ variant = "hero", className }: ShortenFormProps) {
+export function ShortenForm({ variant = "hero", className, serverSession }: ShortenFormProps) {
   const [url, setUrl] = useState("")
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [user, setUser] = useState<SessionUser | null | undefined>(undefined)
+  const [user, setUser] = useState<SessionUser | null | undefined>(
+    serverSession === undefined
+      ? undefined
+      : serverSession
+        ? { id: "", name: "", role: "USER", emailVerified: serverSession.verified }
+        : null,
+  )
 
   useEffect(() => {
     let active = true
@@ -165,11 +177,22 @@ export function ShortenForm({ variant = "hero", className }: ShortenFormProps) {
       )}
 
       {isHero && (
-        <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-          Free · Requires a{" "}
-          <Link href="/register" className="font-medium text-primary hover:underline">
-            verified account
-          </Link>
+        <p className="mt-3 flex flex-wrap items-center justify-center gap-1.5 text-xs text-muted-foreground">
+          {user ? (
+            <>
+              Free · Custom aliases ·{" "}
+              <span className="font-medium text-primary">
+                {user.emailVerified ? "Click analytics included" : "Verify your email to start"}
+              </span>
+            </>
+          ) : (
+            <>
+              Free · Requires a{" "}
+              <Link href="/register" className="font-medium text-primary hover:underline">
+                verified account
+              </Link>
+            </>
+          )}
         </p>
       )}
     </div>

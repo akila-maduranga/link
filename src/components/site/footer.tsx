@@ -2,7 +2,7 @@ import Link from "next/link"
 import { Logo } from "@/components/site/logo"
 import { PlatformIcon } from "@/components/brand-icons"
 
-export function Footer() {
+export function Footer({ authed = false }: { authed?: boolean }) {
   const year = new Date().getFullYear()
   return (
     <footer className="mt-auto border-t border-border/60 bg-background">
@@ -29,7 +29,13 @@ export function Footer() {
               <li><Link href="/explore" className="text-muted-foreground transition-colors hover:text-foreground">Explore directory</Link></li>
               <li><Link href="/dashboard/shortlinks" className="text-muted-foreground transition-colors hover:text-foreground">URL shortener</Link></li>
               <li><Link href="/dashboard/submit" className="text-muted-foreground transition-colors hover:text-foreground">Submit a link</Link></li>
-              <li><Link href="/register" className="text-muted-foreground transition-colors hover:text-foreground">Create account</Link></li>
+              <li>
+                {authed ? (
+                  <Link href="/dashboard" className="text-muted-foreground transition-colors hover:text-foreground">Dashboard</Link>
+                ) : (
+                  <Link href="/register" className="text-muted-foreground transition-colors hover:text-foreground">Create account</Link>
+                )}
+              </li>
             </ul>
           </nav>
 
@@ -49,7 +55,7 @@ export function Footer() {
             © {year} FindLink · findlink.site. Built for communities.
           </p>
           <p className="text-xs text-muted-foreground">
-            Self-hosted · Privacy-first analytics · Docker ready
+            Free to start · Privacy-first analytics · Community driven
           </p>
         </div>
       </div>

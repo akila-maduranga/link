@@ -42,7 +42,7 @@ export async function POST(request: Request) {
 
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, premiumUntil: true },
+    select: { id: true, name: true, email: true, premiumUntil: true, role: true },
   })
   if (!user) return fail("User not found", 404)
 
@@ -55,7 +55,8 @@ export async function POST(request: Request) {
     })
     console.log(`[admin] premium revoked: ${user.email} by ${session.email}`)
     return ok({
-      user: { id: updated.id, premiumUntil: null, isPremium: false },
+      // Admin accounts stay premium via their role — revoke only clears the grant.
+      user: { id: updated.id, premiumUntil: null, isPremium: isPremiumActive(null, user.role) },
       message: `Premium revoked for ${user.email}`,
     })
   }
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
 
   console.log(
     `[admin] premium granted: ${user.email} +${days}d (until ${until.toISOString()}) by ${session.email}` +
-      (isPremiumActive(user.premiumUntil) ? " [extended]" : "")
+      (isPremiumActive(user.premiumUntil, user.role) ? " [extended]" : "")
   )
 
   return ok({

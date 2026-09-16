@@ -38,7 +38,7 @@ export function AuthShell({
           </div>
         </div>
         <p className="relative text-xs text-muted-foreground">
-          Free forever · Self-hosted · Privacy-first
+          Free forever · Privacy-first · Analytics included
         </p>
       </div>
 

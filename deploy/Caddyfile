@@ -16,31 +16,36 @@
 #  Cloudflare in front of this? It just works: CF-Connecting-IP and
 #  CF-IPCountry pass through untouched, which is what the app reads for
 #  visitor IPs and country tracking.
+#
+#  www subdomain: caddy-start.sh (step 3) appends a www.<domain> → <domain>
+#  301 redirect site block at start time when DOMAIN is a real hostname —
+#  Caddy then holds certificates for BOTH names, so https://www.<domain>
+#  works instead of failing with ERR_SSL_PROTOCOL_ERROR.
 # ============================================================================
 
 {
-	#ACME_EMAIL
-	servers {
-		trusted_proxies static private_ranges
-	}
+        #ACME_EMAIL
+        servers {
+                trusted_proxies static private_ranges
+        }
 }
 
 {$DOMAIN} {
-	# Compress responses (skipped automatically when already compressed)
-	encode zstd gzip
+        # Compress responses (skipped automatically when already compressed)
+        encode zstd gzip
 
-	header {
-		# Security headers
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		# HSTS is uncommented by caddy-start.sh — only in domain mode, so
-		# browsers never get pinned to https://<bare VPS IP> during setup.
-		#HSTS Strict-Transport-Security "max-age=31536000"
-		-Server
-	}
+        header {
+                # Security headers
+                X-Content-Type-Options "nosniff"
+                X-Frame-Options "DENY"
+                Referrer-Policy "strict-origin-when-cross-origin"
+                Permissions-Policy "camera=(), microphone=(), geolocation=()"
+                # HSTS is uncommented by caddy-start.sh — only in domain mode, so
+                # browsers never get pinned to https://<bare VPS IP> during setup.
+                #HSTS Strict-Transport-Security "max-age=31536000"
+                -Server
+        }
 
-	# Caddy automatically sets X-Forwarded-For / -Proto / -Host.
-	reverse_proxy findlink:3000
+        # Caddy automatically sets X-Forwarded-For / -Proto / -Host.
+        reverse_proxy findlink:3000
 }

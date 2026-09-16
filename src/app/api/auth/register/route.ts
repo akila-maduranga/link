@@ -5,6 +5,7 @@ import { registerSchema } from "@/lib/validators"
 import { sendVerificationEmail } from "@/lib/email"
 import { BodyTooLargeError, fail, ok, readJsonBody } from "@/lib/api"
 import { rateLimit, clientIp } from "@/lib/rate-limit"
+import { adminDefaultPremiumUntil } from "@/lib/premium"
 
 export const runtime = "nodejs"
 
@@ -44,6 +45,8 @@ export async function POST(request: Request) {
       email,
       passwordHash: await hashPassword(password),
       role: userCount === 0 ? "ADMIN" : "USER",
+      // First account = admin = premium by default (far-future expiry).
+      premiumUntil: userCount === 0 ? adminDefaultPremiumUntil() : undefined,
       verifyToken: tokenHash(rawToken),
       verifyTokenExp: new Date(Date.now() + 24 * 60 * 60 * 1000),
       lastEmailSent: new Date(),

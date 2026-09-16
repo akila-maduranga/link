@@ -8,6 +8,7 @@
  *  - Free accounts: max FREE_TRACKABLE_LIMIT short links WITH click
  *    analytics; unlimited untrackable short links.
  *  - Submitting community/group links is free for everyone (no quota).
+ *  - ADMIN accounts are premium by default, forever — no renewal needed.
  */
 
 /** Max short links with click analytics a free (non-premium) account may create. */
@@ -32,10 +33,26 @@ export function premiumDays(): number {
   return Math.floor(n)
 }
 
-/** Premium is active while premiumUntil lies in the future. */
-export function isPremiumActive(premiumUntil: Date | string | null | undefined): boolean {
+/**
+ * Premium is active while premiumUntil lies in the future. Admin accounts
+ * are premium by default (role === "ADMIN") regardless of premiumUntil,
+ * so existing admin installs get premium without any data migration.
+ */
+export function isPremiumActive(
+  premiumUntil: Date | string | null | undefined,
+  role?: string | null,
+): boolean {
+  if (role === "ADMIN") return true
   if (!premiumUntil) return false
   return new Date(premiumUntil).getTime() > Date.now()
+}
+
+/**
+ * Far-future expiry stamped on the FIRST registered account (the admin
+ * bootstrap) so new installs also carry the entitlement in the database.
+ */
+export function adminDefaultPremiumUntil(): Date {
+  return new Date("2099-12-31T23:59:59.000Z")
 }
 
 /**

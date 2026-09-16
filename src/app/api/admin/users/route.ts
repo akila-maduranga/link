@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     users: users.map((u) => ({
       ...u,
       premiumUntil: u.premiumUntil?.toISOString() ?? null,
-      isPremium: isPremiumActive(u.premiumUntil),
+      isPremium: isPremiumActive(u.premiumUntil, u.role),
     })),
     pagination: { page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) },
   })

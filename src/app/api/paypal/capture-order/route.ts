@@ -19,10 +19,11 @@ import { sendPremiumPaymentEmail, sendPremiumReceiptEmail } from "@/lib/email"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-function currentStatus(premiumUntil: Date | null) {
+function currentStatus(premiumUntil: Date | null, role?: string | null) {
+  // role from the session: admins are premium by default (lib/premium.ts)
   return {
     premiumUntil: premiumUntil?.toISOString() ?? null,
-    premium: isPremiumActive(premiumUntil),
+    premium: isPremiumActive(premiumUntil, role),
   }
 }
 
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
     })
     // Only the buyer may replay their own order.
     if (existing.userId !== session.sub) return fail("Not your order", 403)
-    return ok({ ...currentStatus(user?.premiumUntil ?? null), replayed: true })
+    return ok({ ...currentStatus(user?.premiumUntil ?? null, session.role), replayed: true })
   }
 
   // --- Capture server-side -----------------------------------------------
@@ -157,7 +158,7 @@ export async function POST(request: Request) {
         where: { id: session.sub },
         select: { premiumUntil: true },
       })
-      return ok({ ...currentStatus(user?.premiumUntil ?? null), replayed: true })
+      return ok({ ...currentStatus(user?.premiumUntil ?? null, session.role), replayed: true })
     }
     console.error("[paypal] crediting failed:", err)
     return fail("Payment verified but crediting failed — please contact support.", 500)
@@ -192,5 +193,5 @@ export async function POST(request: Request) {
     }
   })
 
-  return ok({ ...currentStatus(premiumUntil), replayed: false })
+  return ok({ ...currentStatus(premiumUntil, session.role), replayed: false })
 }

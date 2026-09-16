@@ -41,7 +41,7 @@ export default async function DashboardPage() {
   })
 
   const totalClicks = (linkClicks._sum.clicks ?? 0) + (shortClicks._sum.clicks ?? 0)
-  const premium = isPremiumActive(me?.premiumUntil)
+  const premium = isPremiumActive(me?.premiumUntil, session.role)
   const daysLeft = me?.premiumUntil
     ? Math.max(0, Math.ceil((new Date(me.premiumUntil).getTime() - Date.now()) / 86400000))
     : 0
@@ -95,7 +95,14 @@ export default async function DashboardPage() {
           </span>
           {premium ? (
             <div>
-              <p className="text-sm font-semibold">Premium active{premiumUntilText ? ` until ${premiumUntilText}` : ""}</p>
+              <p className="text-sm font-semibold">
+                Premium active
+                {premiumUntilText
+                  ? ` until ${premiumUntilText}`
+                  : session.role === "ADMIN"
+                    ? " — included with your admin account"
+                    : ""}
+              </p>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Unlimited tracked short links{daysLeft > 0 && daysLeft <= 7 ? ` · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : ""}
               </p>
@@ -119,7 +126,11 @@ export default async function DashboardPage() {
         >
           <Link href="/premium">
             <Crown className="h-4 w-4" />
-            {premium ? "Extend premium" : "Upgrade — $3/month"}
+            {premium
+              ? session.role === "ADMIN"
+                ? "View premium"
+                : "Extend premium"
+              : "Upgrade — $3/month"}
           </Link>
         </Button>
       </div>

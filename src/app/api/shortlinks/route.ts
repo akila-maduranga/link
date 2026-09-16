@@ -100,9 +100,9 @@ export async function POST(request: Request) {
   if (trackable) {
     const user = await db.user.findUnique({
       where: { id: session.sub },
-      select: { premiumUntil: true },
+      select: { premiumUntil: true, role: true },
     })
-    if (!isPremiumActive(user?.premiumUntil)) {
+    if (!isPremiumActive(user?.premiumUntil, user?.role)) {
       const trackableCount = await db.shortLink.count({
         where: { userId: session.sub, trackable: true },
       })

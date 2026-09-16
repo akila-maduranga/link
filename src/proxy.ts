@@ -37,8 +37,12 @@ export function proxy(request: NextRequest) {
   const csp = isDev
     ? [
         "default-src 'self'",
-        // Dev needs eval (React Refresh) + inline + HMR websocket
-        "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+        // Dev needs eval (React Refresh) + inline + HMR websocket. The PayPal
+        // SDK script hosts are listed so `next dev` matches PRODUCTION
+        // behavior (prod uses nonce + strict-dynamic, which allows any
+        // script injected by trusted code) — without this, checkout can
+        // never be tested in dev.
+        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.paypal.com https://www.sandbox.paypal.com",
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: blob: https:",
         "font-src 'self'",

@@ -21,7 +21,7 @@ export async function GET() {
       db.shortLink.aggregate({ _sum: { clicks: true } }),
       db.shortLinkEvent.count(),
       db.user.count({ where: { NOT: { emailVerified: null } } }),
-      db.user.count({ where: { premiumUntil: { gt: new Date() } } }),
+      db.user.count({ where: { OR: [{ premiumUntil: { gt: new Date() } }, { role: "ADMIN" }] } }),
       db.payment.count({ where: { source: "PAYPAL" } }),
       db.$queryRaw<Array<{ total: number | null; currency: string | null }>>`
         SELECT CAST(SUM(CAST("amount" AS REAL)) AS TEXT) AS total, "currency"
@@ -69,7 +69,7 @@ export async function GET() {
     recentUsers: recentUsers.map((u) => ({
       ...u,
       premiumUntil: u.premiumUntil?.toISOString() ?? null,
-      isPremium: isPremiumActive(u.premiumUntil),
+      isPremium: isPremiumActive(u.premiumUntil, u.role),
     })),
     recentLinks,
   })

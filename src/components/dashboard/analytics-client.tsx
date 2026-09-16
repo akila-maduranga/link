@@ -28,7 +28,7 @@ import {
   UserCheck,
 } from "lucide-react"
 import { formatCount } from "@/lib/format"
-import { countryFlag } from "@/data/countries"
+import { countryFlag, countryName } from "@/data/countries"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
@@ -304,7 +304,7 @@ export function AnalyticsClient({ link }: { link: ShortLinkInfo }) {
 
           {/* Breakdowns */}
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <BreakdownCard title="Top countries" rows={stats.countries} format={(v) => `${countryFlag(v)} ${v === "Unknown" ? "Unknown" : v}`} />
+            <BreakdownCard title="Top countries" rows={stats.countries} format={(v) => `${countryFlag(v)} ${countryName(v)}`} />
             <BreakdownCard title="Browsers" rows={stats.browsers} />
             <BreakdownCard title="Operating systems" rows={stats.oses} />
             <BreakdownCard title="Referrers" rows={stats.referrers} emptyLabel="Direct / none" />

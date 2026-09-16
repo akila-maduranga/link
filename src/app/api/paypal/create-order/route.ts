@@ -23,10 +23,16 @@ export async function POST(request: Request) {
     return fail("Payments are not configured yet — the site admin needs to set PayPal credentials", 503)
   }
 
-  // Anti-abuse: order creation is a rate-limited PayPal API call.
-  const rl = rateLimit(`paypal-create:${session.sub}`, 6, 10 * 60 * 1000) // 6 / 10 min
+  // Anti-abuse: order creation is a rate-limited PayPal API call. 10/10 min:
+  // every popup open consumes one attempt, so legitimate testing (open,
+  // close, retry) must not trip it — an attacker still can't hammer PayPal.
+  const rl = rateLimit(`paypal-create:${session.sub}`, 10, 10 * 60 * 1000)
   if (!rl.ok) {
-    return fail("Too many payment attempts — please wait a few minutes.", 429)
+    const mins = Math.max(1, Math.ceil(rl.retryAfterMs / 60_000))
+    return fail(
+      `Too many checkout attempts — please wait about ${mins} minute${mins === 1 ? "" : "s"} and try again.`,
+      429
+    )
   }
 
   // Drain the body: nothing is needed for order creation (the amount comes
@@ -45,12 +51,12 @@ export async function POST(request: Request) {
   try {
     const user = await db.user.findUnique({
       where: { id: session.sub },
-      select: { premiumUntil: true },
+      select: { premiumUntil: true, role: true },
     })
 
     const orderId = await createPremiumOrder(session.sub)
     console.log(
-      `[paypal] order created: ${orderId} for ${session.email} (premium=${isPremiumActive(user?.premiumUntil)})`
+      `[paypal] order created: ${orderId} for ${session.email} (premium=${isPremiumActive(user?.premiumUntil, user?.role)})`
     )
     return ok({ orderId })
   } catch (err) {
