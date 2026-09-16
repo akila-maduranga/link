@@ -29,7 +29,7 @@ WhatsApp groups, Facebook pages and more — designed to run comfortably on a
 | **Auth & security** | JWT sessions (httpOnly cookies), bcrypt passwords, zod validation, rate limiting, open-redirect protection, hashed IPs |
 | **Admin panel** | Platform stats, moderate listings (feature / hide / delete), recent users |
 | **Beautiful UI** | Dark/light themes, fully responsive, animated, accessible |
-| **Self-hosted** | SQLite (no separate DB server), Docker, ~350 MB image, one-command install |
+| **Self-hosted** | SQLite (no separate DB server), Docker, ~420 MB image, one-command install |
 
 The **first account you register automatically becomes the ADMIN**.
 
@@ -140,7 +140,7 @@ configure.** 🎉
 
 The repo ships with a GitHub Actions workflow (`.github/workflows/build.yml`)
 that builds the Docker image on **every push to `main`** and publishes it to
-`ghcr.io`. Your VPS then only **pulls** the finished image — no build, ~150 MB
+`ghcr.io`. Your VPS then only **pulls** the finished image — no build, ~180 MB
 download, works on any tiny VPS:
 
 1. Push your code to GitHub (Step 1) and wait ~5 min for the
@@ -357,7 +357,7 @@ After editing `.env`, always run `docker compose up -d` to apply.
 | `port is already allocated` (3000) | Another app uses port 3000 — set a different `APP_PORT` in `.env` and `docker compose up -d` |
 | https://findlink.site doesn't load | 1) DNS: `ping findlink.site` must answer with your VPS IP. 2) Ports 80 + 443 open in any cloud firewall. 3) `docker logs findlink-caddy` shows certificate issuance. Wait a minute and reload |
 | Prisma error about libssl/openssl | Build the provided `Dockerfile` unmodified (it already installs `openssl`) |
-| App keeps restarting: `Cannot find module '@prisma/debug'` | Your image predates the fixed Dockerfile — its runtime stage shipped an incomplete Prisma CLI. Fix: update the repo files (`Dockerfile`, `.dockerignore`, `scripts/prisma-closure.cjs` — re-uploading the zip's `findlink/` folder over your clone is easiest), `git push`, wait for the **Actions** build to go green, then `./install.sh --update` |
+| App keeps restarting: `Cannot find module '@prisma/…'` (`@prisma/debug`, `@prisma/config`, …) | Your image predates the fixed Dockerfile — its runtime stage shipped an incomplete Prisma CLI closure (prisma 6.19 eagerly requires `@prisma/config` + its dependency tree at startup). Fix: update the repo files (`Dockerfile`, `.dockerignore`, `scripts/prisma-closure.cjs` — re-uploading the zip's `findlink/` folder over your clone is easiest), `git push`, wait for the **Actions** build to go green, then `./install.sh --update` |
 | Emails not arriving | Check `RESEND_API_KEY`, a **verified findlink.site domain** in Resend, and `docker logs findlink` |
 | Country column shows “Unknown” | Enable **Cloudflare IP Geolocation** (Step 5, optional Cloudflare section) or front the app with a proxy that sets a country header |
 | Forgot admin access | The first registered user is admin. If you lost it: `docker compose down`, rename the volume (`docker volume rm findlink-data` — ⚠️ deletes all data) and start fresh |
@@ -377,7 +377,7 @@ After editing `.env`, always run `docker compose up -d` to apply.
 │  └───────────────────────────┬──────────────────────────────────────────┘   │
 │                              │ internal network                             │
 │  ┌─ findlink (app) ──────────▼──────────────────────────────────────────┐   │
-│  │  Next.js 16 standalone + slim Prisma CLI (~350 MB image)             │   │
+│  │  Next.js 16 standalone + complete Prisma CLI closure (~420 MB image)  │   │
 │  │  ├─ UI: React 19 · Tailwind CSS 4 · shadcn/ui · Recharts              │   │
 │  │  ├─ API routes: auth, links, shortlinks, stats, admin, health        │   │
 │  │  ├─ Redirect engines: /s/:code (short) · /go/:slug (directory)       │   │
@@ -392,7 +392,7 @@ After editing `.env`, always run `docker compose up -d` to apply.
 
 - SQLite runs **in-process** — no PostgreSQL/MySQL server eating 100–300 MB.
 - Next.js **standalone** output ships only traced dependencies.
-- The runtime image carries a slim, complete Prisma CLI closure (~44 MB, computed automatically by `scripts/prisma-closure.cjs`, with fail-loud guards) so every boot self-syncs the SQLite schema — no manual migrations, no extra DB tooling.
+- The runtime image carries the Prisma CLI's complete dependency closure (~75 MB, 33 packages — `@prisma/config`'s `effect`/`c12` chain included — computed automatically by `scripts/prisma-closure.cjs`, with fail-loud guards; no package may be excluded, prisma 6.19 requires them eagerly) so every boot self-syncs the SQLite schema — no manual migrations, no extra DB tooling.
 - In-memory sliding-window rate limiting — no Redis.
 - GeoIP via CDN request headers (Cloudflare) — no multi-megabyte GeoIP database.
 - Swap file (created by the installer) carries the Docker build through its memory peak.

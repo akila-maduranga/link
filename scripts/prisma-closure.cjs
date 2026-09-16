@@ -16,16 +16,17 @@
  * the ESM client-generator dir) — verified empirically against `db push`.
  *
  * Usage:
- *   node prisma-closure.cjs [--root <node_modules>] --out <dir> [--exclude pkg] [pkg ...]
+ *   node prisma-closure.cjs [--root <node_modules>] --out <dir> [pkg ...]
  *     --root     source node_modules dir   (default: ./node_modules)
  *     --out      destination root dir      (packages land in <out>/node_modules/)
- *     --exclude  package to SKIP (its subtree is skipped too)
  *     [pkg]      packages to start from    (default: prisma)
  *
- * NOTE on excluding @prisma/config: the CLI only loads it when a
- * prisma.config.ts/js exists in the project — this repo has none, and that
- * package drags in effect + typescript + the unjs ecosystem (~50 MB).
- * Verified empirically: `prisma db push` runs fine without it.
+ * There is deliberately NO exclusion flag. prisma 6.19's CLI eagerly
+ * `require("@prisma/config")` at the top level of build/index.js (and
+ * @prisma/config pulls c12/effect/deepmerge-ts/empathic). Excluding any
+ * hard dependency ships an image that crash-loops with MODULE_NOT_FOUND —
+ * exactly what happened twice before this rule existed. If you want a
+ * smaller payload, prune by FILE patterns (below), never by package.
  */
 'use strict';
 
@@ -37,11 +38,15 @@ const argv = process.argv.slice(2);
 let root = path.resolve('node_modules');
 let out = null;
 const roots = [];
-const exclude = new Set();
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === '--root')    { root = path.resolve(argv[++i]); continue; }
   if (argv[i] === '--out')     { out = path.resolve(argv[++i]); continue; }
-  if (argv[i] === '--exclude') { exclude.add(argv[++i]); continue; }
+  if (argv[i] === '--exclude') {
+    console.error('prisma-closure: --exclude is no longer supported — excluding a hard');
+    console.error('dependency of the prisma CLI ships an image that crash-loops');
+    console.error('(prisma 6.19 eagerly requires @prisma/config). Prune by FILE pattern instead.');
+    process.exit(1);
+  }
   roots.push(argv[i]);
 }
 if (!out) {
@@ -87,7 +92,7 @@ const queue = roots.map((name) => ({ name, fromDir: null }));
 
 while (queue.length > 0) {
   const { name, fromDir } = queue.shift();
-  if (seen.has(name) || exclude.has(name)) continue;
+  if (seen.has(name)) continue;
   seen.add(name);
 
   const dir = resolvePkg(name, fromDir);
@@ -164,9 +169,6 @@ const mb = (totalBytes / 1024 / 1024).toFixed(1);
 console.log(`prisma-closure: ${copied.length} packages, ${mb} MB`);
 for (const c of copied.sort((a, b) => b.bytes - a.bytes)) {
   console.log(`  ${(c.bytes / 1024).toFixed(0).padStart(7)} KB  ${c.name}`);
-}
-if (exclude.size > 0) {
-  console.log(`prisma-closure: excluded (and their subtrees): ${[...exclude].join(', ')}`);
 }
 
 for (const m of missingOptional) console.warn(`prisma-closure: WARN optional dep not installed: ${m}`);

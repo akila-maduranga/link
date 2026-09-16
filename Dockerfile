@@ -2,8 +2,9 @@
 
 # ==============================================================================
 # FindLink (findlink.site) — optimized for 512 MB VPS deployments
-# Multi-stage build: deps → builder → minimal runtime (~350 MB final image,
-# incl. the Node alpine base + a slim Prisma CLI for boot-time schema sync)
+# Multi-stage build: deps → builder → minimal runtime (~420 MB final image,
+# incl. the Node alpine base + the complete Prisma CLI closure for boot-time
+# schema sync — prisma 6.19 eagerly requires @prisma/config, no exclusions)
 # ==============================================================================
 
 # ---------- Stage 1: dependencies ----------
@@ -48,15 +49,17 @@ RUN npx prisma generate
 RUN npm run build
 
 # Isolate the Prisma CLI + its full dependency closure for the runtime image.
-# prisma 6 needs @prisma/debug, @prisma/get-platform, @prisma/engines-version
-# and @prisma/fetch-engine as well — copying just prisma/ + @prisma/engines/
-# ships an image that crash-loops with: Cannot find module '@prisma/debug'.
-# The script also prunes query-engine dead weight (~100 MB) and fails loudly
-# if a future prisma version needs a package this doesn't know about.
-# @prisma/config is excluded: only loaded when a prisma.config.ts exists
-# (not in this repo) — it would drag in effect + typescript (~50 MB).
-RUN node scripts/prisma-closure.cjs --root /app/node_modules --out /prisma-cli \
-        --exclude @prisma/config
+# prisma 6.19 hard-depends on @prisma/config (an EAGER top-level require in
+# prisma/build/index.js — NOT lazy as we first assumed) plus @prisma/engines,
+# which in turn needs @prisma/debug, @prisma/engines-version and
+# @prisma/get-platform; @prisma/config drags in c12/effect/deepmerge-ts/
+# empathic. Anything less crash-loops at boot — we shipped two broken images
+# learning this ('Cannot find module @prisma/debug', then '@prisma/config').
+# The script walks package.json dependencies recursively, so the set is
+# always COMPLETE for whatever prisma version package-lock installs; it also
+# prunes query-engine dead weight and fails loudly on missing packages.
+# No exclusions are allowed — excluding a hard dependency breaks the CLI.
+RUN node scripts/prisma-closure.cjs --root /app/node_modules --out /prisma-cli
 
 # ---------- Stage 3: runtime ----------
 FROM node:20-alpine AS runner
