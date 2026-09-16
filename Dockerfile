@@ -8,7 +8,7 @@
 # ==============================================================================
 
 # ---------- Stage 1: dependencies ----------
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 
 # Prisma postinstall (prisma generate) needs the schema at install time
@@ -22,7 +22,7 @@ ENV DATABASE_URL="file:/app/db/custom.db" \
 RUN npm ci --no-audit --no-fund
 
 # ---------- Stage 2: build ----------
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -46,7 +46,21 @@ RUN npx prisma generate
 #                               instead of thrashing swap (looks like a hang)
 #   NEXT_TURBOPACK_USE_WORKER → runs Turbopack in-process: one Node process
 #                               instead of two (~100 MB less peak memory)
-RUN npm run build
+# Build hardening (added after a CI hang — build printed the route table
+# then produced no output for 40+ min and never exited):
+#   --network=none   → the build needs ZERO network: deps are vendored by
+#                      `npm ci` in the deps stage, there are no next/font
+#                      remote fetches, and telemetry is disabled. An offline
+#                      build can never hang on a stalled end-of-build socket
+#                      flush — a known Next.js failure family (nextjs
+#                      #70758 / #98696: detached flush requests hang the
+#                      process after the route table is printed).
+#   timeout -s KILL 900 → hard watchdog: a cold build takes 1–3 min; past
+#                      15 min the step is SIGKILLed and fails LOUDLY (rc 137)
+#                      instead of silently burning hours of runner time. When
+#                      the step's PID 1 exits, the kernel reaps orphaned
+#                      grandchildren — nothing lingers.
+RUN --network=none timeout -s KILL 900 npm run build
 
 # Isolate the Prisma CLI + its full dependency closure for the runtime image.
 # prisma 6.19 hard-depends on @prisma/config (an EAGER top-level require in
@@ -62,7 +76,7 @@ RUN npm run build
 RUN node scripts/prisma-closure.cjs --root /app/node_modules --out /prisma-cli
 
 # ---------- Stage 3: runtime ----------
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 # openssl: required by Prisma engines on alpine (musl)

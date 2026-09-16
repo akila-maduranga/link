@@ -35,6 +35,11 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # A hung step must fail loudly — GitHub's default job timeout is 6 HOURS.
+    # (Added after a runner hung 40+ min inside `RUN npm run build` with no
+    # error output. The Dockerfile also runs the build offline with a 15-min
+    # SIGKILL watchdog — see its "Build hardening" comment.)
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
