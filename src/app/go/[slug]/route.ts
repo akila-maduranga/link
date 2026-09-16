@@ -2,6 +2,7 @@ import { after } from "next/server"
 import { NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { clientIp, rateLimit } from "@/lib/rate-limit"
+import { safeExternalUrl } from "@/lib/api"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -54,6 +55,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     })
   }
 
+  // OWASP unvalidated-redirect guard: only absolute http(s) destinations,
+  // re-checked at redirect time (protects against legacy/edited DB rows).
+  const destination = safeExternalUrl(link.url)
+  if (!destination) {
+    return new Response(notFoundPage(), {
+      status: 404,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+    })
+  }
+
   const ip = clientIp(request)
   if (rateLimit(`go:${clean}:${ip}`, 60, 60 * 1000).ok) {
     after(async () => {
@@ -68,7 +79,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
     })
   }
 
-  return NextResponse.redirect(link.url, {
+  return NextResponse.redirect(destination, {
     status: 302,
     headers: {
       "cache-control": "no-store, max-age=0",

@@ -155,24 +155,6 @@ export function SettingsClient() {
         </section>
       )}
 
-      {/* Email delivery info */}
-      <section className="rounded-2xl border border-border/60 bg-card p-6">
-        <h2 className="text-base font-semibold">About email delivery</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          FindLink sends verification and password-reset emails through the{" "}
-          <a
-            href="https://resend.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-primary hover:underline"
-          >
-            Resend
-          </a>{" "}
-          API. The server administrator configures this with a <code className="rounded bg-muted px-1.5 py-0.5 text-xs">RESEND_API_KEY</code>{" "}
-          environment variable — up to 100 emails/day on the free tier.
-        </p>
-      </section>
-
       {/* Danger zone */}
       <section className="rounded-2xl border border-destructive/30 bg-destructive/5 p-6">
         <h2 className="text-base font-semibold text-destructive">Session</h2>

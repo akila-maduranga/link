@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { Search, SlidersHorizontal, Loader2, ChevronLeft, ChevronRight, X } from "lucide-react"
+import { Search, SlidersHorizontal, Loader2, ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { LinkCard, type DirectoryLink } from "@/components/links/link-card"
 import { PLATFORMS } from "@/data/platforms"
 import { CATEGORIES } from "@/data/categories"
@@ -168,12 +168,12 @@ export function ExploreClient() {
         <Button type="submit" className="rounded-xl font-semibold">Search</Button>
       </form>
 
-      {/* Platform pills */}
+      {/* Platform pills — 44px touch targets on mobile */}
       <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1">
         <button
           onClick={() => setParam("platform", "")}
           className={cn(
-            "shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+            "shrink-0 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors sm:py-1.5",
             !platform
               ? "border-primary bg-primary text-primary-foreground"
               : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
@@ -186,7 +186,7 @@ export function ExploreClient() {
             key={p.id}
             onClick={() => setParam("platform", p.id)}
             className={cn(
-              "shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+              "shrink-0 rounded-full border px-4 py-2.5 text-sm font-medium transition-colors sm:py-1.5",
               platform === p.id
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
@@ -197,12 +197,13 @@ export function ExploreClient() {
         ))}
       </div>
 
-      {/* Filters row */}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <SlidersHorizontal className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      {/* Filters — 2 equal columns on mobile (full-width controls, thumb-friendly),
+          flexible single row on sm+ */}
+      <div className="mt-4 grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
+        <SlidersHorizontal className="hidden h-4 w-4 text-muted-foreground sm:block" aria-hidden="true" />
 
         <Select value={category || "all"} onValueChange={(v) => setParam("category", v)}>
-          <SelectTrigger className="w-44 rounded-xl bg-card" aria-label="Filter by category">
+          <SelectTrigger className="w-full rounded-xl bg-card sm:w-44" aria-label="Filter by category">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent className="max-h-80 rounded-xl">
@@ -217,13 +218,14 @@ export function ExploreClient() {
           <PopoverTrigger asChild>
             <Button
               variant="outline"
-              className="w-48 justify-between rounded-xl bg-card font-normal"
+              className="w-full justify-between rounded-xl bg-card font-normal sm:w-48"
             >
-              {selectedCountry ? (
-                <span className="truncate">{countryFlag(selectedCountry.code)} {selectedCountry.name}</span>
-              ) : (
-                "All countries"
-              )}
+              <span className="truncate">
+                {selectedCountry
+                  ? `${countryFlag(selectedCountry.code)} ${selectedCountry.name}`
+                  : "All countries"}
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-64 rounded-xl p-0" align="start">
@@ -260,7 +262,7 @@ export function ExploreClient() {
         </Popover>
 
         <Select value={language || "all"} onValueChange={(v) => setParam("language", v)}>
-          <SelectTrigger className="w-44 rounded-xl bg-card" aria-label="Filter by language">
+          <SelectTrigger className="w-full rounded-xl bg-card sm:w-44" aria-label="Filter by language">
             <SelectValue placeholder="Language" />
           </SelectTrigger>
           <SelectContent className="max-h-80 rounded-xl">
@@ -274,7 +276,7 @@ export function ExploreClient() {
         </Select>
 
         <Select value={sort} onValueChange={(v) => setParam("sort", v)}>
-          <SelectTrigger className="w-40 rounded-xl bg-card" aria-label="Sort results">
+          <SelectTrigger className="w-full rounded-xl bg-card sm:w-40" aria-label="Sort results">
             <SelectValue placeholder="Sort" />
           </SelectTrigger>
           <SelectContent className="rounded-xl">
@@ -288,7 +290,7 @@ export function ExploreClient() {
           <Button
             variant="ghost"
             onClick={clearAll}
-            className="gap-1.5 rounded-xl text-muted-foreground"
+            className="col-span-2 justify-self-center gap-1.5 rounded-xl text-muted-foreground sm:col-span-1 sm:justify-self-start"
             size="sm"
           >
             <X className="h-3.5 w-3.5" /> Clear {activeFilters} filter{activeFilters > 1 ? "s" : ""}
@@ -316,7 +318,7 @@ export function ExploreClient() {
                 size="icon"
                 disabled={pagination.page <= 1}
                 onClick={() => goPage(pagination.page - 1)}
-                className="rounded-xl"
+                className="h-10 w-10 rounded-xl"
                 aria-label="Previous page"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -332,7 +334,7 @@ export function ExploreClient() {
                     variant={p === pagination.page ? "default" : "outline"}
                     size="icon"
                     onClick={() => goPage(p)}
-                    className="rounded-xl"
+                    className="h-10 w-10 rounded-xl"
                     aria-label={`Page ${p}`}
                     aria-current={p === pagination.page ? "page" : undefined}
                   >
@@ -344,7 +346,7 @@ export function ExploreClient() {
                 size="icon"
                 disabled={pagination.page >= pagination.totalPages}
                 onClick={() => goPage(pagination.page + 1)}
-                className="rounded-xl"
+                className="h-10 w-10 rounded-xl"
                 aria-label="Next page"
               >
                 <ChevronRight className="h-4 w-4" />

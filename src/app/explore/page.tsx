@@ -2,6 +2,10 @@ import { Suspense } from "react"
 import type { Metadata } from "next"
 import { ExploreClient } from "@/components/links/explore-client"
 
+export const dynamic = "force-dynamic"
+
+// SSR (not prerendered): per-request CSP nonces from src/proxy.ts only apply to dynamically
+// rendered responses — a prerendered shell would ship nonce-less scripts that strict-dynamic blocks.
 export const metadata: Metadata = {
   title: "Explore",
   description:

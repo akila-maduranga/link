@@ -14,8 +14,10 @@ export interface SessionPayload {
 
 function getSecret(): Uint8Array {
   const secret = process.env.AUTH_SECRET
-  if (!secret || secret.length < 16) {
-    throw new Error("AUTH_SECRET must be set (min 16 chars)")
+  // HS256 should be signed with >= 256-bit entropy (32 chars) — OWASP ASVS 3.2.1/6.2.2.
+  // install.sh generates `openssl rand -hex 32` (64 chars), so this only rejects weak manual secrets.
+  if (!secret || secret.length < 32) {
+    throw new Error("AUTH_SECRET must be set (min 32 chars — run ./install.sh or: openssl rand -hex 32)")
   }
   return new TextEncoder().encode(secret)
 }

@@ -4,7 +4,7 @@ import { db } from "@/lib/db"
 import { parseUserAgent } from "@/lib/ua"
 import { clientIp, rateLimit } from "@/lib/rate-limit"
 import { hashIp, referrerDomain } from "@/lib/slug"
-import { countryFromHeaders } from "@/lib/api"
+import { countryFromHeaders, safeExternalUrl } from "@/lib/api"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -57,6 +57,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
     })
   }
 
+  // OWASP unvalidated-redirect guard: only absolute http(s) destinations,
+  // re-checked at redirect time (protects against legacy/edited DB rows).
+  const destination = safeExternalUrl(link.destination)
+  if (!destination) {
+    return new Response(notFoundPage(), {
+      status: 404,
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+    })
+  }
+
   // Anti-abuse: cap event writes per IP per slug (bots hammering the same link)
   const ip = clientIp(request)
   const allowed = rateLimit(`hit:${slug}:${ip}`, 60, 60 * 1000).ok
@@ -88,7 +98,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
     })
   }
 
-  return NextResponse.redirect(link.destination, {
+  return NextResponse.redirect(destination, {
     status: 302,
     headers: {
       "cache-control": "no-store, max-age=0",

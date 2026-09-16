@@ -12,13 +12,34 @@ import type { NextConfig } from "next";
  *   Only set when TURBOPACK_MEMORY_LIMIT is present in the environment —
  *   e.g. in the Docker builder stage. CI builders with ample RAM leave it
  *   unset (no limit).
+ * - poweredByHeader: no "X-Powered-By: Next.js" disclosure (OWASP A05).
+ * - headers(): static OWASP secure-headers baseline for EVERY response
+ *   (incl. immutable assets that skip middleware). The nonce-based CSP,
+ *   HSTS and COOP are set per-request in src/middleware.ts — keep the two
+ *   lists disjoint so headers are never duplicated.
  */
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
+];
+
 const nextConfig: NextConfig = {
   output: "standalone",
   typescript: {
     ignoreBuildErrors: true,
   },
+  poweredByHeader: false,
   reactStrictMode: false,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: securityHeaders,
+      },
+    ];
+  },
   ...(process.env.TURBOPACK_MEMORY_LIMIT
     ? {
         experimental: {

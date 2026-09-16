@@ -3,6 +3,10 @@ import type { Metadata } from "next"
 import { RegisterForm } from "@/components/auth/register-form"
 import { getAllowedEmailDomains } from "@/lib/email-domains"
 
+export const dynamic = "force-dynamic"
+
+// SSR (not prerendered): per-request CSP nonces from src/proxy.ts only apply to dynamically
+// rendered responses — a prerendered shell would ship nonce-less scripts that strict-dynamic blocks.
 export const metadata: Metadata = { title: "Create account" }
 
 export default function RegisterPage() {

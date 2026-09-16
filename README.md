@@ -342,6 +342,7 @@ docker compose up -d
 | `RESEND_API_KEY` | — | Resend API key. Without it, verification links are logged and shown in the UI (dev mode) |
 | `EMAIL_FROM` | — | `FindLink <noreply@findlink.site>` (requires a Resend-verified domain) |
 | `ALLOWED_EMAIL_DOMAINS` | — | New registrations limited to these email domains — default **Gmail + iCloud** (`gmail.com,googlemail.com,icloud.com,me.com,mac.com`). Set `*` to allow any |
+| `NEXT_PUBLIC_GA_ID` | — | Google Analytics 4 measurement ID (gtag.js) — baked in at **build** time (GitHub Actions / `--build`), not read at runtime. Unset → `G-R6LJCEJD24` |
 
 After editing `.env`, always run `docker compose up -d` to apply.
 
@@ -399,16 +400,24 @@ After editing `.env`, always run `docker compose up -d` to apply.
 - Memory budget: app capped at 450 MB + Caddy at 60 MB, with log rotation — the kernel always keeps breathing room.
 - Build optimized for low RAM: TypeScript checks skipped at build time, Turbopack runs in-process (one Node process, ~100 MB less peak), V8 heap capped, and a 1 GB Turbopack guardrail turns a would-be hang into a clear error. Or skip VPS builds entirely via the GitHub Actions image.
 
+**Credits**
+
+- Platform icons: [coloured-icons](https://github.com/dheereshag/coloured-icons) by Dheeresh Agarwal — MIT License (served from `public/icons/platforms/`).
+
 ---
 
 ## 🔒 Security notes
 
-- Passwords: bcrypt (10 rounds). Sessions: signed JWT in `httpOnly`, `sameSite=lax` cookies.
+- Passwords: bcrypt (10 rounds). Sessions: signed JWT (HS256, secret ≥ 32 chars) in `httpOnly`, `sameSite=lax` cookies.
 - Registrations restricted to **Gmail and iCloud** email domains (server-enforced + form hint); configurable via `ALLOWED_EMAIL_DOMAINS`.
-- Short-link destinations are validated to `http`/`https` only — blocks `javascript:` and other scheme abuse.
+- Short-link destinations are validated to `http`/`https` only — at submission **and again at redirect time** — blocking `javascript:` and other scheme abuse.
 - Visitor IPs are **never stored raw** — a salted SHA-256 hash is kept for unique-visitor counts only.
-- Rate limits: login 10/10 min, registration 5/h, submissions 10/day, shortening 30/h per user, 60 clicks/min per IP per link.
-- Admin actions are authorized server-side on every request.
+- Rate limits: login 10/10 min per IP **and per account**, registration 5/h, submissions 10/day, shortening 30/h per user, 60 clicks/min per IP per link.
+- Admin actions and all record mutations are authorized server-side on every request (ownership checks on every link/short link).
+- **OWASP secure headers on every response** (`src/proxy.ts` + `next.config.ts`): per-request **nonce CSP** with `strict-dynamic` (Google Analytics is allow-listed and keeps working), `frame-ancestors 'none'` + `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, and **HSTS** over HTTPS.
+- Login is **timing-safe** (a dummy bcrypt compare runs for unknown emails, so response times can't be used to enumerate accounts); password-reset responses never reveal whether an email exists.
+- Request bodies are capped at 32 KB (`413` above that) — protects the 512 MB container from memory-exhaustion payloads.
+- `npm audit` is reviewed each release: remaining advisories (as of this release) are confined to the Prisma CLI **boot-time** dependency chain (config loading during `prisma db push`) — never in the request-serving path.
 
 ---
 

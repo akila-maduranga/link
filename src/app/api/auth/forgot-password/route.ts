@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "crypto"
 import { db } from "@/lib/db"
 import { forgotPasswordSchema } from "@/lib/validators"
 import { sendPasswordResetEmail } from "@/lib/email"
-import { fail, ok } from "@/lib/api"
+import { BodyTooLargeError, fail, ok, readJsonBody } from "@/lib/api"
 import { rateLimit, clientIp } from "@/lib/rate-limit"
 
 export const runtime = "nodejs"
@@ -13,8 +13,9 @@ export async function POST(request: Request) {
 
   let body: unknown
   try {
-    body = await request.json()
-  } catch {
+    body = await readJsonBody(request)
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) return fail("Request body too large", 413)
     return fail("Invalid request body")
   }
 

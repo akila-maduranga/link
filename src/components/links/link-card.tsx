@@ -120,12 +120,12 @@ export function LinkCard({ link, compact = false }: { link: DirectoryLink; compa
             variant="ghost"
             size="icon"
             onClick={copyUrl}
-            className="h-8.5 w-8.5 rounded-lg text-muted-foreground hover:text-foreground"
+            className="h-10 w-10 rounded-lg text-muted-foreground hover:text-foreground sm:h-8.5 sm:w-8.5"
             aria-label="Copy link"
           >
             {copied ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
           </Button>
-          <Button asChild size="sm" className="rounded-lg px-4 font-semibold">
+          <Button asChild size="sm" className="h-10 rounded-lg px-4 font-semibold sm:h-8">
             <a
               href={`/go/${link.slug}`}
               target="_blank"

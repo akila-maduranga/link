@@ -29,6 +29,7 @@ export const CATEGORIES: Category[] = [
   { id: "books", name: "Books & Writing", icon: "book-open" },
   { id: "memes", name: "Memes & Fun", icon: "laugh" },
   { id: "spirituality", name: "Spirituality", icon: "sparkles" },
+  { id: "adult", name: "18+ Adult", icon: "venetian-mask" },
   { id: "other", name: "Other", icon: "folder" },
 ]
 

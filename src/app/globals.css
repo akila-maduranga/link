@@ -118,6 +118,8 @@
   }
   html {
     scroll-behavior: smooth;
+    /* Kill the grey flash when tapping links/buttons on mobile */
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply bg-background text-foreground;
@@ -126,6 +128,23 @@
   ::selection {
     background: oklch(0.75 0.16 163 / 30%);
   }
+}
+
+/* ---------- Mobile ---------- */
+/* iOS Safari auto-zooms the page when an input with font-size < 16px receives
+   focus. Forcing 16px on small screens stops the jarring zoom WITHOUT disabling
+   pinch-zoom (which would fail WCAG 1.4.4). */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Keep toasts above the home indicator on notched phones (viewportFit=cover). */
+[data-sonner-toaster] {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* ---------- Scrollbar ---------- */

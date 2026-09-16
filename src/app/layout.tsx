@@ -1,4 +1,5 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
+import Script from "next/script"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import "./globals.css"
@@ -8,6 +9,22 @@ import { ThemeProvider } from "next-themes"
 import { Toaster } from "@/components/ui/sonner"
 
 const appUrl = process.env.APP_URL || "https://findlink.site"
+
+// Google Analytics 4 (gtag.js) — override at build time with
+// NEXT_PUBLIC_GA_ID=… ; unset → this site's measurement ID.
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID || "G-R6LJCEJD24"
+
+// Mobile browser behaviour: keep user zoom ENABLED (WCAG 1.4.4 — never set maximumScale<1);
+// viewportFit=cover lets the app paint under notches/home-indicators on modern phones.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0c110f" },
+    { media: "(prefers-color-scheme: light)", color: "#fbfdfb" },
+  ],
+}
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
@@ -41,6 +58,13 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased bg-background text-foreground">
+        <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
+        <Script id="gtag-init" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GA_ID}');`}
+        </Script>
         <ThemeProvider attribute="class" defaultTheme="dark" disableTransitionOnChange>
           <div className="flex min-h-screen flex-col">
             <Navbar />

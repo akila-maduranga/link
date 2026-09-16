@@ -61,8 +61,9 @@ export default async function HomePage() {
         <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 sm:pt-24 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <div className="animate-in fade-in slide-in-from-bottom-2 mb-6 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary duration-700">
-              <Sparkles className="h-3.5 w-3.5" />
-              findlink.site — free & open community directory + shortener
+              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">findlink.site — free & open community directory + shortener</span>
+              <span className="sm:hidden">findlink.site — free & open directory</span>
             </div>
 
             <h1 className="animate-in fade-in slide-in-from-bottom-3 text-4xl font-extrabold leading-[1.1] tracking-tight duration-700 sm:text-5xl md:text-6xl">
@@ -106,7 +107,9 @@ export default async function HomePage() {
       {/* --------------------------- Platform strip --------------------------- */}
       <section className="border-b border-border/40 bg-card/30">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="no-scrollbar flex items-center justify-center gap-3 overflow-x-auto sm:justify-between sm:gap-4">
+          {/* justify-start below lg: with overflow-x-auto + centering, flexbox centers the
+              overflowing row and the leading icons render off-screen (unreachable). */}
+          <div className="no-scrollbar flex items-center justify-start gap-3 overflow-x-auto sm:gap-4 lg:justify-center">
             {PLATFORMS.slice(0, 10).map((p) => (
               <Link
                 key={p.id}

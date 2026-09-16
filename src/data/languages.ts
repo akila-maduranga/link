@@ -23,6 +23,7 @@ export const LANGUAGES: Language[] = [
   { code: "pt", name: "Portuguese", native: "Português" },
   { code: "ro", name: "Romanian", native: "Română" },
   { code: "ru", name: "Russian", native: "Русский" },
+  { code: "si", name: "Sinhala", native: "සිංහල" },
   { code: "es", name: "Spanish", native: "Español" },
   { code: "sw", name: "Swahili", native: "Kiswahili" },
   { code: "ta", name: "Tamil", native: "தமிழ்" },

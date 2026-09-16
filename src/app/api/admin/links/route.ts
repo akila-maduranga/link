@@ -1,6 +1,6 @@
 import { db } from "@/lib/db"
 import { getSession } from "@/lib/auth"
-import { fail, ok } from "@/lib/api"
+import { BodyTooLargeError, fail, ok, readJsonBody } from "@/lib/api"
 import { Prisma } from "@prisma/client"
 
 export const runtime = "nodejs"
@@ -59,8 +59,9 @@ export async function PATCH(request: Request) {
 
   let body: { id?: string; featured?: boolean; status?: string }
   try {
-    body = await request.json()
-  } catch {
+    body = await readJsonBody(request)
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) return fail("Request body too large", 413)
     return fail("Invalid request body")
   }
 
