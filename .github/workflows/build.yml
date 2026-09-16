@@ -37,8 +37,9 @@ jobs:
     runs-on: ubuntu-latest
     # A hung step must fail loudly — GitHub's default job timeout is 6 HOURS.
     # (Added after a runner hung 40+ min inside `RUN npm run build` with no
-    # error output. The Dockerfile also runs the build offline with a 15-min
-    # SIGKILL watchdog — see its "Build hardening" comment.)
+    # error output. The Dockerfile now runs the build offline with a 25-min
+    # SIGKILL watchdog AND self-recovers when the build already finished but
+    # its process refused to exit — see its "Build hardening" comment.)
     timeout-minutes: 45
     permissions:
       contents: read
@@ -67,10 +68,22 @@ jobs:
             latest
 
       - name: Build and push
+        # Step-level backstop under the job-level timeout-minutes: 45 above —
+        # build + export + push may never exceed 40 min.
+        timeout-minutes: 40
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          # GitHub-hosted runners have ~7 GB RAM: override the safe 512 MB
+          # VPS build defaults (Dockerfile ARGs BUILD_HEAP_MB / TURBO_LIMIT_MB).
+          # A roomy heap keeps the build several minutes faster (no GC crawl)
+          # and, combined with the Dockerfile's artifact-verified auto-
+          # recovery, a post-route-table exit stall heals itself instead of
+          # leaving a stuck or red run.
+          build-args: |
+            BUILD_HEAP_MB=3072
+            TURBO_LIMIT_MB=4096
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Layer cache lives in GitHub's cache storage — rebuilds after small

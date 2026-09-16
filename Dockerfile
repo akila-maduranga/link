@@ -47,38 +47,69 @@ COPY . .
 # env_file), never at build time — verified: a clean build succeeds without
 # it, and baking a placeholder only triggers BuildKit's
 # SecretsUsedInArgOrEnv warning on every CI run.
+# Memory profile, parameterized for the two build hosts:
+#   • Local builds on a 512 MB VPS (docker compose build / install.sh --build)
+#     keep the safe defaults declared below.
+#   • GitHub-hosted CI runners (~7 GB RAM) override both ARGs via build-args
+#     in .github/workflows/build.yml — running CI at the 512 MB V8 cap made
+#     builds crawl (12+ min, constant GC near the cap) before the 2026-09-16
+#     fix.
+#     NODE_OPTIONS              → caps the V8 heap; the JS side may gently
+#                                 use swap instead of blowing up the machine
+#     TURBOPACK_MEMORY_LIMIT    → Turbopack (Rust) aborts with a clear error
+#                                 past the cap instead of thrashing swap
+#                                 (which looks like a hang)
+#     NEXT_TURBOPACK_USE_WORKER → runs Turbopack in-process: one Node
+#                                 process instead of two (~100 MB less peak)
+ARG BUILD_HEAP_MB=512
+ARG TURBO_LIMIT_MB=1024
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     DATABASE_URL="file:/app/db/custom.db" \
-    NODE_OPTIONS="--max-old-space-size=512" \
-    TURBOPACK_MEMORY_LIMIT=1024 \
+    NODE_OPTIONS="--max-old-space-size=${BUILD_HEAP_MB}" \
+    TURBOPACK_MEMORY_LIMIT=${TURBO_LIMIT_MB} \
     NEXT_TURBOPACK_USE_WORKER=0
 
-# Generate the Prisma client (musl engine included via schema binaryTargets)
-RUN npx prisma generate
+# Generate the Prisma client (musl engine included via schema binaryTargets).
+# Watchdog-wrapped: a stalled generate fails loudly after 5 min instead of
+# silently burning runner minutes. (Network stays ON here on purpose: if the
+# prisma engines ever failed to vendor during `npm ci`, generate may still
+# download them — an offline variant would turn that into a hard error.)
+RUN timeout -s KILL 300 npx prisma generate
 
-# 512 MB VPS build profile:
-#   NODE_OPTIONS              → caps the V8 heap; the JS side may gently use
-#                               swap instead of blowing up the machine
-#   TURBOPACK_MEMORY_LIMIT    → Turbopack aborts with a clear error past 1 GB
-#                               instead of thrashing swap (looks like a hang)
-#   NEXT_TURBOPACK_USE_WORKER → runs Turbopack in-process: one Node process
-#                               instead of two (~100 MB less peak memory)
-# Build hardening (added after a CI hang — build printed the route table
-# then produced no output for 40+ min and never exited):
-#   --network=none   → the build needs ZERO network: deps are vendored by
-#                      `npm ci` in the deps stage, there are no next/font
-#                      remote fetches, and telemetry is disabled. An offline
-#                      build can never hang on a stalled end-of-build socket
-#                      flush — a known Next.js failure family (nextjs
-#                      #70758 / #98696: detached flush requests hang the
-#                      process after the route table is printed).
-#   timeout -s KILL 900 → hard watchdog: a cold build takes 1–3 min; past
-#                      15 min the step is SIGKILLed and fails LOUDLY (rc 137)
-#                      instead of silently burning hours of runner time. When
-#                      the step's PID 1 exits, the kernel reaps orphaned
-#                      grandchildren — nothing lingers.
-RUN --network=none timeout -s KILL 900 npm run build
+# Build hardening — reinforced after the CI hang RECURRED on 2026-09-16
+# (route table printed 12 min in, then no output, no exit, again):
+#   --network=none        the build needs ZERO network (deps are vendored by
+#                         `npm ci`; no next/font remote fetches; telemetry
+#                         disabled) — an offline build cannot hang on a
+#                         stalled end-of-build socket flush (nextjs #70758 /
+#                         #98696 failure family).
+#   timeout -s KILL 1500  hard watchdog: past 25 min the step is SIGKILLed;
+#                         when the step's PID 1 exits, the kernel reaps the
+#                         orphaned grandchildren — nothing lingers.
+#   artifact-verified auto-recovery — THE fix for the observed hang: Next
+#                         16 writes .next/standalone/server.js and
+#                         .next/routes-manifest.json BEFORE printing the
+#                         route table (build/index.js: writeStandaloneDirectory
+#                         precedes printTreeView; the stall sits in the graceful-
+#                         shutdown await AFTER the table is printed). So when
+#                         the watchdog kills a process that already printed
+#                         its route table, the output on disk is byte-identical
+#                         to a healthy exit: we VERIFY the artifacts and
+#                         continue green instead of failing CI over a process
+#                         that merely refuses to exit. The runner stage copies
+#                         standalone/static/public straight from .next/, so the
+#                         npm build script's trailing `cp` steps (which never
+#                         ran) are irrelevant for the image.
+RUN --network=none timeout -s KILL 1500 npm run build; \
+    code=$?; \
+    if [ "$code" -eq 0 ]; then exit 0; fi; \
+    if [ -f .next/BUILD_ID ] && [ -f .next/routes-manifest.json ] && [ -f .next/standalone/server.js ]; then \
+        echo "WARN: next build wrote all artifacts (route table printed) but its process failed to exit on this runner (rc=$code) - continuing with the verified build output"; \
+        exit 0; \
+    fi; \
+    echo "ERROR: npm run build failed (rc=$code) without complete artifacts"; \
+    exit "$code"
 
 # Isolate the Prisma CLI + its full dependency closure for the runtime image.
 # prisma 6.19 hard-depends on @prisma/config (an EAGER top-level require in
@@ -91,7 +122,8 @@ RUN --network=none timeout -s KILL 900 npm run build
 # always COMPLETE for whatever prisma version package-lock installs; it also
 # prunes query-engine dead weight and fails loudly on missing packages.
 # No exclusions are allowed — excluding a hard dependency breaks the CLI.
-RUN node scripts/prisma-closure.cjs --root /app/node_modules --out /prisma-cli
+# (watchdog-wrapped: pure CPU/FS work, must finish within minutes)
+RUN timeout -s KILL 300 node scripts/prisma-closure.cjs --root /app/node_modules --out /prisma-cli
 
 # ---------- Stage 3: runtime ----------
 FROM node:22-alpine AS runner

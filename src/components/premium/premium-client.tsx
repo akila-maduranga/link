@@ -289,11 +289,15 @@ export function PremiumClient() {
                 <p className="mt-3 text-sm text-muted-foreground">
                   Active until{" "}
                   <strong className="text-foreground">{fmtDate(user.premiumUntil)}</strong>
-                  {daysLeft(user.premiumUntil) <= 7 && (
-                    <span className="ml-1 text-amber-500">
-                      ({daysLeft(user.premiumUntil)} {daysLeft(user.premiumUntil) === 1 ? "day" : "days"} left)
-                    </span>
-                  )}
+                  <span
+                    className={cn(
+                      "ml-1",
+                      daysLeft(user.premiumUntil) <= 7 ? "text-amber-500" : "text-muted-foreground/70"
+                    )}
+                  >
+                    ({daysLeft(user.premiumUntil)}{" "}
+                    {daysLeft(user.premiumUntil) === 1 ? "day" : "days"} left)
+                  </span>
                 </p>
                 <p className="mt-1.5 text-xs text-muted-foreground/70">
                   Paying again stacks — each payment adds {config?.days ?? 30} more days.
@@ -344,7 +348,7 @@ export function PremiumClient() {
                 <Link href="/dashboard/settings">Resend verification</Link>
               </Button>
             </div>
-          ) : premium && !foreverPremium ? (
+          ) : premium && foreverPremium ? (
             /* Forever-premium accounts (admins) never need to pay. */
             <p className="rounded-lg bg-primary/5 px-3.5 py-3 text-center text-sm text-muted-foreground">
               You&apos;re all set — premium is included with your account, no payment needed.
@@ -372,8 +376,17 @@ export function PremiumClient() {
               </Button>
             </div>
           ) : (
-            /* PayPal Smart Payment Buttons mount here */
+            /* PayPal Smart Payment Buttons mount here — first purchase AND
+             * renewals ("add more days") alike. */
             <div>
+              {premium && (
+                <p className="mb-3 text-center text-sm font-medium text-muted-foreground">
+                  Add {config?.days ?? 30} more days for{" "}
+                  <strong className="text-foreground">
+                    ${config?.price ?? "3.00"} {config?.currency ?? "USD"}
+                  </strong>
+                </p>
+              )}
               <div ref={buttonsRef} aria-label="PayPal checkout buttons" />
               {(phase === "loading" || !config) && (
                 <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">

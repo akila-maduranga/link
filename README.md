@@ -359,6 +359,12 @@ Until credentials are set, the `/premium` page simply shows a
 > with the sandbox **personal** account (email + password visible under
 > *developer.paypal.com → Testing tools → Sandbox accounts*). Switch to
 > `live` + live credentials when done.
+>
+> Sandbox payment errors? The exact server-side reason is always in the logs:
+> `docker logs findlink | grep paypal`. The two usual suspects: (1) editing
+> `.env` without `docker compose up -d` — credentials only load at container
+> start; (2) mixing modes — a **sandbox** app's client id/secret with
+> `PAYPAL_MODE=live` (or vice versa) fails auth with `401`.
 
 ---
 
@@ -428,6 +434,7 @@ After editing `.env`, always run `docker compose up -d` to apply.
 | `port is already allocated` (3000) | Another app uses port 3000 — set a different `APP_PORT` in `.env` and `docker compose up -d` |
 | https://findlink.site doesn't load | 1) DNS: `ping findlink.site` must answer with your VPS IP. 2) Ports 80 + 443 open in any cloud firewall. 3) `docker logs findlink-caddy` shows certificate issuance. Wait a minute and reload |
 | https://**www**.findlink.site gives `ERR_SSL_PROTOCOL_ERROR` | The www DNS record must point at the VPS (Step 4), and the Caddy container must run the updated start script: `docker restart findlink-caddy`, then give it ~a minute to issue the www certificate (`docker logs findlink-caddy`) |
+| PayPal popup errors during a sandbox payment | The real reason is server-side: `docker logs findlink \| grep paypal`. ① `PayPal auth failed (401)` → the client id/secret don't match `PAYPAL_MODE` — sandbox credentials only work with `PAYPAL_MODE=sandbox` (default); after fixing `.env` run `docker compose up -d`. ② `Too many checkout attempts` → the 10-per-10-minute order limit was hit while testing; wait a few minutes. ③ `Payment not completed (DECLINED)` → the sandbox buyer's test funding source declined — create/use another sandbox personal account (*developer.paypal.com → Testing tools → Sandbox accounts*) |
 | Prisma error about libssl/openssl | Build the provided `Dockerfile` unmodified (it already installs `openssl`) |
 | App keeps restarting: `Cannot find module '@prisma/…'` (`@prisma/debug`, `@prisma/config`, …) | Your image predates the fixed Dockerfile — its runtime stage shipped an incomplete Prisma CLI closure (prisma 6.19 eagerly requires `@prisma/config` + its dependency tree at startup). Fix: update the repo files (`Dockerfile`, `.dockerignore`, `scripts/prisma-closure.cjs` — re-uploading the zip's `findlink/` folder over your clone is easiest), `git push`, wait for the **Actions** build to go green, then `./install.sh --update` |
 | Emails not arriving | Check `RESEND_API_KEY`, a **verified findlink.site domain** in Resend, and `docker logs findlink` |
