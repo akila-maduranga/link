@@ -69,13 +69,22 @@ export function ShortenForm({ variant = "hero", className }: ShortenFormProps) {
       })
       const data = await res.json()
       if (!res.ok) {
-        toast.error(data.error ?? "Could not shorten this URL")
+        if (data.code === "TRACKABLE_QUOTA") {
+          toast.error(data.error ?? "Free plan limit reached", {
+            action: {
+              label: "Upgrade",
+              onClick: () => (window.location.href = "/premium"),
+            },
+          })
+        } else {
+          toast.error(data.error ?? "Could not shorten this URL")
+        }
         return
       }
       const shortUrl = `${window.location.origin}/s/${data.link.slug}`
       setResult(shortUrl)
       setUrl("")
-      toast.success("Short link created!")
+      toast.success(data.link.trackable ? "Short link created!" : "Short link created (no analytics)")
     } catch {
       toast.error("Network error — please try again")
     } finally {

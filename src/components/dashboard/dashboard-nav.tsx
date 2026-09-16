@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Link2, Plus, Settings, Zap } from "lucide-react"
+import { LayoutDashboard, Link2, Plus, Settings, Zap, Crown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const ITEMS = [
@@ -11,6 +11,7 @@ const ITEMS = [
   { href: "/dashboard/links", label: "My Listings", icon: Link2 },
   { href: "/dashboard/shortlinks", label: "Short Links", icon: Zap },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/premium", label: "Premium", icon: Crown },
 ]
 
 export function DashboardNav() {

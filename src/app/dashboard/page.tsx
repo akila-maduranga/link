@@ -1,8 +1,9 @@
 import Link from "next/link"
-import { BarChart3, ExternalLink, Eye, Link2, MousePointerClick, Plus, TrendingUp, Zap } from "lucide-react"
+import { BarChart3, Crown, ExternalLink, Eye, Link2, MousePointerClick, Plus, TrendingUp, Zap } from "lucide-react"
 import { db } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { formatCount, formatDate } from "@/lib/format"
+import { isPremiumActive, FREE_TRACKABLE_LIMIT } from "@/lib/premium"
 import { Button } from "@/components/ui/button"
 import { PlatformIcon } from "@/components/brand-icons"
 import { ShortenForm } from "@/components/shortener/shorten-form"
@@ -14,13 +15,16 @@ export default async function DashboardPage() {
   const session = await getSession()
   if (!session) return null
 
-  const [myLinks, myShortLinks, linkClicks, shortClicks, listingViews] = await Promise.all([
-    db.link.count({ where: { userId: session.sub } }),
-    db.shortLink.count({ where: { userId: session.sub } }),
-    db.link.aggregate({ where: { userId: session.sub }, _sum: { clicks: true } }),
-    db.shortLink.aggregate({ where: { userId: session.sub }, _sum: { clicks: true } }),
-    db.link.aggregate({ where: { userId: session.sub }, _sum: { views: true } }),
-  ])
+  const [myLinks, myShortLinks, linkClicks, shortClicks, listingViews, me, trackableCount] =
+    await Promise.all([
+      db.link.count({ where: { userId: session.sub } }),
+      db.shortLink.count({ where: { userId: session.sub } }),
+      db.link.aggregate({ where: { userId: session.sub }, _sum: { clicks: true } }),
+      db.shortLink.aggregate({ where: { userId: session.sub }, _sum: { clicks: true } }),
+      db.link.aggregate({ where: { userId: session.sub }, _sum: { views: true } }),
+      db.user.findUnique({ where: { id: session.sub }, select: { premiumUntil: true } }),
+      db.shortLink.count({ where: { userId: session.sub, trackable: true } }),
+    ])
 
   const recentShortLinks = await db.shortLink.findMany({
     where: { userId: session.sub },
@@ -37,6 +41,13 @@ export default async function DashboardPage() {
   })
 
   const totalClicks = (linkClicks._sum.clicks ?? 0) + (shortClicks._sum.clicks ?? 0)
+  const premium = isPremiumActive(me?.premiumUntil)
+  const daysLeft = me?.premiumUntil
+    ? Math.max(0, Math.ceil((new Date(me.premiumUntil).getTime() - Date.now()) / 86400000))
+    : 0
+  const premiumUntilText = me?.premiumUntil
+    ? new Date(me.premiumUntil).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+    : null
 
   const cards = [
     { label: "My listings", value: myLinks, icon: Link2, href: "/dashboard/links" },
@@ -68,6 +79,49 @@ export default async function DashboardPage() {
             </Link>
           </Button>
         </div>
+      </div>
+
+      {/* Plan banner */}
+      <div
+        className={
+          premium
+            ? "flex flex-col gap-3 rounded-2xl border border-primary/40 bg-primary/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+            : "flex flex-col gap-3 rounded-2xl border border-border/60 bg-card px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+        }
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15">
+            <Crown className="h-4.5 w-4.5 text-primary" />
+          </span>
+          {premium ? (
+            <div>
+              <p className="text-sm font-semibold">Premium active{premiumUntilText ? ` until ${premiumUntilText}` : ""}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Unlimited tracked short links{daysLeft > 0 && daysLeft <= 7 ? ` · ${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : ""}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm font-semibold">
+                Free plan · {trackableCount}/{FREE_TRACKABLE_LIMIT} tracked links used
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Untracked short links, redirects and community submissions stay unlimited — premium unlocks analytics on every link.
+              </p>
+            </div>
+          )}
+        </div>
+        <Button
+          asChild
+          variant={premium ? "outline" : "default"}
+          size="sm"
+          className="shrink-0 rounded-xl font-semibold"
+        >
+          <Link href="/premium">
+            <Crown className="h-4 w-4" />
+            {premium ? "Extend premium" : "Upgrade — $3/month"}
+          </Link>
+        </Button>
       </div>
 
       {/* Stats */}

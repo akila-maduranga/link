@@ -25,6 +25,7 @@ export default async function ShortLinkAnalyticsPage({
       destination: true,
       title: true,
       isActive: true,
+      trackable: true,
       clicks: true,
       userId: true,
     },

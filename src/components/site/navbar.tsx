@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Menu, X, LayoutDashboard, ShieldCheck, LogOut, Settings, Link2, Sparkles, ChevronDown } from "lucide-react"
+import { Menu, X, LayoutDashboard, ShieldCheck, LogOut, Settings, Link2, Sparkles, ChevronDown, Crown } from "lucide-react"
 import { Logo } from "@/components/site/logo"
 import { ThemeToggle } from "@/components/site/theme-toggle"
 import { Button } from "@/components/ui/button"
@@ -24,6 +24,7 @@ interface SessionUser {
   email: string
   role: string
   emailVerified: boolean
+  isPremium?: boolean
 }
 
 const NAV_LINKS = [
@@ -63,6 +64,7 @@ export function Navbar() {
   const links = [
     ...NAV_LINKS,
     ...(user ? [{ href: "/dashboard", label: "Dashboard" }] : []),
+    ...(user ? [{ href: "/premium", label: "Premium" }] : []),
     ...(user?.role === "ADMIN" ? [{ href: "/admin", label: "Admin" }] : []),
   ]
 
@@ -136,6 +138,12 @@ export function Navbar() {
                   <DropdownMenuItem asChild>
                     <Link href="/dashboard/shortlinks" className="cursor-pointer">
                       <Link2 className="h-4 w-4" /> My Short Links
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/premium" className="cursor-pointer">
+                      <Crown className={cn("h-4 w-4", user.isPremium && "text-primary")} />
+                      {user.isPremium ? "Premium" : "Upgrade to Premium"}
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>

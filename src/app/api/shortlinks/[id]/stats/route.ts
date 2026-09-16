@@ -16,11 +16,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params
   const link = await db.shortLink.findUnique({
     where: { id },
-    select: { id: true, userId: true, slug: true, clicks: true, createdAt: true },
+    select: { id: true, userId: true, slug: true, clicks: true, createdAt: true, trackable: true },
   })
   if (!link) return fail("Short link not found", 404)
   if (link.userId !== session.sub && session.role !== "ADMIN") {
     return fail("Not your short link", 403)
+  }
+  if (!link.trackable) {
+    // Free-tier untrackable link — created without analytics on purpose.
+    return fail("Analytics are disabled for this short link", 403, { code: "NOT_TRACKABLE" })
   }
 
   const { searchParams } = new URL(request.url)

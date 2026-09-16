@@ -32,6 +32,11 @@ const nextConfig: NextConfig = {
   },
   poweredByHeader: false,
   reactStrictMode: false,
+  // Dev only: the sandbox/browser reaches the dev server via 127.0.0.1 while
+  // it listens on localhost — Next 16 blocks "cross-origin" dev resources
+  // (HMR socket) otherwise, which silently prevents hydration. No effect on
+  // production builds.
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   async headers() {
     return [
       {

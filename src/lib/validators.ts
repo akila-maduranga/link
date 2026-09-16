@@ -93,6 +93,9 @@ export const shortLinkCreateSchema = z.object({
     .regex(/^[a-zA-Z0-9_-]{3,32}$/, "3-32 characters: letters, numbers, - and _ only")
     .optional()
     .or(z.literal("")),
+  // Click analytics on/off. Free accounts: max 2 trackable links,
+  // unlimited untrackable. Premium: unlimited both.
+  trackable: z.boolean().optional(),
 })
 
 export const shortLinkUpdateSchema = z.object({

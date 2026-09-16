@@ -5,6 +5,7 @@ import { uniqueShortCode } from "@/lib/slug"
 import { BodyTooLargeError, fail, ok, readJsonBody } from "@/lib/api"
 import { rateLimit } from "@/lib/rate-limit"
 import { Prisma } from "@prisma/client"
+import { isPremiumActive, FREE_TRACKABLE_LIMIT } from "@/lib/premium"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,6 +17,7 @@ const SELECT = {
   title: true,
   description: true,
   isActive: true,
+  trackable: true,
   clicks: true,
   createdAt: true,
   updatedAt: true,
@@ -86,9 +88,33 @@ export async function POST(request: Request) {
     "api", "admin", "login", "register", "dashboard", "explore", "settings",
     "verify-email", "forgot-password", "reset-password", "go", "s", "link",
     "about", "help", "terms", "privacy", "health", "static", "_next", "public",
+    "premium",
   ])
   if (data.customSlug && reserved.has(data.customSlug.toLowerCase())) {
     return fail("This short code is reserved", 422)
+  }
+
+  // Free-tier quota: max FREE_TRACKABLE_LIMIT short links WITH click
+  // analytics. Untrackable links and community submissions stay unlimited.
+  const trackable = data.trackable !== false // default: analytics on
+  if (trackable) {
+    const user = await db.user.findUnique({
+      where: { id: session.sub },
+      select: { premiumUntil: true },
+    })
+    if (!isPremiumActive(user?.premiumUntil)) {
+      const trackableCount = await db.shortLink.count({
+        where: { userId: session.sub, trackable: true },
+      })
+      if (trackableCount >= FREE_TRACKABLE_LIMIT) {
+        return fail(
+          `Free plan limit reached — ${FREE_TRACKABLE_LIMIT} trackable short links max. ` +
+            "Turn off click analytics for this link, or upgrade to Premium for unlimited.",
+          403,
+          { code: "TRACKABLE_QUOTA", upgradeUrl: "/premium" }
+        )
+      }
+    }
   }
 
   try {
@@ -99,6 +125,7 @@ export async function POST(request: Request) {
         destination: data.destination,
         title: data.title || null,
         description: data.description || null,
+        trackable,
         userId: session.sub,
       },
       select: SELECT,

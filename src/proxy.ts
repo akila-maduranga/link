@@ -23,6 +23,13 @@ const GA_IMG_SRC = "https://www.google-analytics.com https://*.googletagmanager.
 const GA_CONNECT_SRC =
   "https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com"
 
+// PayPal Smart Payment Buttons (loaded dynamically on /premium — with
+// 'strict-dynamic' the SDK script itself needs no script-src entry, but the
+// button iframe / logos / SDK XHR still need frame/img/connect-src).
+const PAYPAL_FRAME_SRC = "https://*.paypal.com https://*.paypalobjects.com"
+const PAYPAL_IMG_SRC = "https://*.paypal.com https://*.paypalobjects.com"
+const PAYPAL_CONNECT_SRC = "https://*.paypal.com https://*.paypalobjects.com"
+
 export function proxy(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID())
   const isDev = process.env.NODE_ENV !== "production"
@@ -36,6 +43,7 @@ export function proxy(request: NextRequest) {
         "img-src 'self' data: blob: https:",
         "font-src 'self'",
         "connect-src 'self' ws: http: https:",
+        `frame-src 'self' ${PAYPAL_FRAME_SRC}`,
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'self'",
@@ -45,9 +53,11 @@ export function proxy(request: NextRequest) {
         "default-src 'self'",
         `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-inline' ${GA_SCRIPT_HOSTS}`,
         "style-src 'self' 'unsafe-inline'",
-        `img-src 'self' data: ${GA_IMG_SRC}`,
+        `img-src 'self' data: ${GA_IMG_SRC} ${PAYPAL_IMG_SRC}`,
         "font-src 'self'",
-        `connect-src 'self' ${GA_CONNECT_SRC}`,
+        `connect-src 'self' ${GA_CONNECT_SRC} ${PAYPAL_CONNECT_SRC}`,
+        `frame-src 'self' ${PAYPAL_FRAME_SRC}`,
+        `child-src 'self' ${PAYPAL_FRAME_SRC}`,
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'self'",
@@ -63,7 +73,10 @@ export function proxy(request: NextRequest) {
   const response = NextResponse.next({ request: { headers: requestHeaders } })
 
   response.headers.set("Content-Security-Policy", csp)
-  response.headers.set("Cross-Origin-Opener-Policy", "same-origin")
+  // PayPal's checkout popup needs to postMessage back to its opener —
+  // 'same-origin' would sever the handshake (PayPal recommends
+  // same-origin-allow-popups for pages embedding their SDK).
+  response.headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
   if (!isDev) {
     // Honored only over HTTPS; safe behind the Caddy TLS proxy.
     response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")

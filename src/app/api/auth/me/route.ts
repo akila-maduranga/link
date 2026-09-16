@@ -1,8 +1,10 @@
 import { db } from "@/lib/db"
 import { getSession } from "@/lib/auth"
 import { ok } from "@/lib/api"
+import { isPremiumActive, FREE_TRACKABLE_LIMIT } from "@/lib/premium"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 export async function GET() {
   const session = await getSession()
@@ -17,8 +19,24 @@ export async function GET() {
       role: true,
       emailVerified: true,
       createdAt: true,
+      premiumUntil: true,
     },
   })
+  if (!user) return ok({ user: null })
 
-  return ok({ user })
+  const premium = isPremiumActive(user.premiumUntil)
+  const trackableUsed = await db.shortLink.count({
+    where: { userId: session.sub, trackable: true },
+  })
+
+  return ok({
+    user: {
+      ...user,
+      premiumUntil: user.premiumUntil?.toISOString() ?? null,
+      isPremium: premium,
+      // null = unlimited (premium); number = free-tier cap
+      trackableUsed,
+      trackableLimit: premium ? null : FREE_TRACKABLE_LIMIT,
+    },
+  })
 }

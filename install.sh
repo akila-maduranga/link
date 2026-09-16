@@ -5,7 +5,8 @@
 #  Usage (from a cloned repo):
 #      ./install.sh [--domain findlink.site] [--resend-key re_xxx]
 #                    [--email you@example.com] [--image ghcr.io/USER/findlink:latest]
-#                    [--port 3000]
+#                    [--port 3000] [--paypal-client-id XXX --paypal-secret XXX]
+#                    [--paypal-mode live] [--admin-email you@example.com]
 #
 #  Usage (via curl — pass the repo URL):
 #      curl -fsSL https://raw.githubusercontent.com/USER/REPO/main/install.sh \
@@ -17,6 +18,12 @@
 #                       enables automatic HTTPS via the built-in Caddy proxy)
 #      --resend-key KEY Resend API key for sending emails
 #      --email    ADDR  Let's Encrypt account email (expiry notices)
+#      --paypal-client-id ID   PayPal REST app client id (premium checkout)
+#      --paypal-secret KEY     PayPal REST app secret — server-only
+#      --paypal-mode MODE      live | sandbox (default: sandbox; live takes
+#                              real payments — set this when going live)
+#      --admin-email ADDR      Who receives payment notifications (default:
+#                              every admin account on the site)
 #      --image    NAME  Use a PREBUILT image instead of building on the VPS
 #                       (strongly recommended for 512 MB VPS — see README).
 #                       Auto-detected from your GitHub remote when possible.
@@ -47,6 +54,10 @@ OPTIONS
   --domain FQDN     Your domain, e.g. findlink.site (APP_URL + automatic HTTPS)
   --resend-key KEY  Resend API key for sending emails
   --email ADDR      Let's Encrypt account email (expiry notices)
+  --paypal-client-id ID   PayPal client id for premium checkout
+  --paypal-secret KEY     PayPal secret (server-only, never exposed)
+  --paypal-mode MODE      live | sandbox (default sandbox — test mode)
+  --admin-email ADDR      Payment notification recipient (default: admins)
   --image NAME      Deploy a PREBUILT image (e.g. ghcr.io/USER/findlink:latest)
                     instead of building on the VPS — recommended for 512 MB.
                     Auto-detected for GitHub clones; remembered in .env
@@ -76,12 +87,17 @@ banner() {
 }
 
 REPO_URL=""; DOMAIN=""; RESEND_KEY=""; ACME_EMAIL=""; IMAGE_ARG=""; PORT="3000"; ASSUME_YES="false"; UPDATE="false"; FORCE_BUILD="false"
+PAYPAL_CLIENT_ID=""; PAYPAL_SECRET=""; PAYPAL_MODE=""; ADMIN_EMAIL=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)       [[ $# -ge 2 ]] || die "$1 needs a URL, e.g. https://github.com/USER/findlink.git"; REPO_URL="$2"; shift 2 ;;
     --domain)     [[ $# -ge 2 ]] || die "$1 needs a domain, e.g. findlink.site"; DOMAIN="$2"; shift 2 ;;
     --resend-key) [[ $# -ge 2 ]] || die "$1 needs a key value"; RESEND_KEY="$2"; shift 2 ;;
     --email)      [[ $# -ge 2 ]] || die "$1 needs an email address"; ACME_EMAIL="$2"; shift 2 ;;
+    --paypal-client-id) [[ $# -ge 2 ]] || die "$1 needs a client id value"; PAYPAL_CLIENT_ID="$2"; shift 2 ;;
+    --paypal-secret)    [[ $# -ge 2 ]] || die "$1 needs a secret value"; PAYPAL_SECRET="$2"; shift 2 ;;
+    --paypal-mode)      [[ $# -ge 2 ]] || die "$1 needs live or sandbox"; PAYPAL_MODE="$(echo "$2" | tr '[:upper:]' '[:lower:]')"; shift 2 ;;
+    --admin-email)      [[ $# -ge 2 ]] || die "$1 needs an email address"; ADMIN_EMAIL="$2"; shift 2 ;;
     --image)      [[ $# -ge 2 ]] || die "$1 needs an image name, e.g. ghcr.io/USER/findlink:latest"; IMAGE_ARG="$2"; shift 2 ;;
     --port)       [[ $# -ge 2 ]] || die "$1 needs a port number"; PORT="$2"; shift 2 ;;
     --update)     UPDATE="true"; shift ;;
@@ -91,6 +107,9 @@ while [[ $# -gt 0 ]]; do
     *)            die "Unknown option: $1 — run ./install.sh --help for usage" ;;
   esac
 done
+if [[ -n "$PAYPAL_MODE" && "$PAYPAL_MODE" != "live" && "$PAYPAL_MODE" != "sandbox" ]]; then
+  die "--paypal-mode must be 'live' or 'sandbox'"
+fi
 if [[ -n "$IMAGE_ARG" && "$FORCE_BUILD" == "true" ]]; then
   die "--image and --build cannot be combined — pick one"
 fi
@@ -217,6 +236,21 @@ if [[ -f "$ENV_FILE" ]]; then
     rm -f "${ENV_FILE}.bak"
     ok "Let's Encrypt account email set to ${ACME_EMAIL}"
   fi
+  # PayPal premium checkout (runtime env — no image rebuild needed)
+  set_env_var() {
+    # set_env_var <NAME> <VALUE>
+    sed -i.bak "s|^${1}=.*|${1}=${2}|" "$ENV_FILE" 2>/dev/null || true
+    grep -q "^${1}=" "$ENV_FILE" || echo "${1}=${2}" >> "$ENV_FILE"
+    rm -f "${ENV_FILE}.bak"
+  }
+  [[ -n "$PAYPAL_CLIENT_ID" ]] && { set_env_var PAYPAL_CLIENT_ID "$PAYPAL_CLIENT_ID"; ok "PayPal client id set"; }
+  [[ -n "$PAYPAL_SECRET" ]]    && { set_env_var PAYPAL_CLIENT_SECRET "$PAYPAL_SECRET"; ok "PayPal secret set"; }
+  [[ -n "$PAYPAL_MODE" ]]      && { set_env_var PAYPAL_MODE "$PAYPAL_MODE"; ok "PayPal mode: ${PAYPAL_MODE}"; }
+  [[ -n "$ADMIN_EMAIL" ]]      && { set_env_var ADMIN_EMAIL "$ADMIN_EMAIL"; ok "Payment notifications → ${ADMIN_EMAIL}"; }
+  # Sensible defaults for premium pricing when a fresh .env predates them
+  grep -q '^PREMIUM_PRICE_USD=' "$ENV_FILE" || echo "PREMIUM_PRICE_USD=3.00" >> "$ENV_FILE"
+  grep -q '^PREMIUM_DAYS=' "$ENV_FILE" || echo "PREMIUM_DAYS=30" >> "$ENV_FILE"
+  grep -q '^PAYPAL_MODE=' "$ENV_FILE" || echo "PAYPAL_MODE=sandbox" >> "$ENV_FILE"
 else
   say "Creating ${ENV_FILE}…"
   AUTH_SECRET="$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
@@ -240,6 +274,17 @@ ACME_EMAIL=${ACME_EMAIL}
 APP_PORT=${PORT}
 RESEND_API_KEY=${RESEND_KEY}
 EMAIL_FROM=${EMAIL_FROM}
+# --- Premium checkout (PayPal Orders API v2) ---
+# Get credentials: developer.paypal.com → Apps & Credentials.
+# Leave empty to keep the premium page in "coming soon" mode.
+PAYPAL_CLIENT_ID=${PAYPAL_CLIENT_ID}
+PAYPAL_CLIENT_SECRET=${PAYPAL_SECRET}
+# live = real payments, sandbox = test (default)
+PAYPAL_MODE=${PAYPAL_MODE:-sandbox}
+# Payment notification recipient (empty = every admin account)
+ADMIN_EMAIL=${ADMIN_EMAIL}
+PREMIUM_PRICE_USD=3.00
+PREMIUM_DAYS=30
 EOF
   ok "Generated AUTH_SECRET (${AUTH_SECRET:0:8}…)"
 fi
@@ -365,6 +410,13 @@ if [[ -n "$CADDY_DOMAIN_F" ]]; then
   echo -e "                  ${DIM}at this VPS (check: docker logs -f findlink-caddy)${RESET}"
 else
   echo -e "  HTTPS         : ${DIM}off (no domain set) — serving HTTP on port 80${RESET}"
+fi
+PAYPAL_ID_F="$(grep '^PAYPAL_CLIENT_ID=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
+PAYPAL_MODE_F="$(grep '^PAYPAL_MODE=' "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true)"
+if [[ -n "$PAYPAL_ID_F" ]]; then
+  echo -e "  Premium       : ${DIM}PayPal checkout ON (${PAYPAL_MODE_F:-sandbox} mode)${RESET}"
+else
+  echo -e "  Premium       : ${DIM}off — add PAYPAL_CLIENT_ID/SECRET to .env to sell premium${RESET}"
 fi
 echo -e "  Admin signup  : ${DIM}the FIRST account you register becomes ADMIN${RESET}"
 echo -e "  Emails        : ${DIM}set RESEND_API_KEY in .env to enable verification mails${RESET}"

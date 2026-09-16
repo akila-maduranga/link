@@ -6,6 +6,7 @@ import {
   BarChart3,
   Check,
   Copy,
+  Crown,
   ExternalLink,
   Loader2,
   Plus,
@@ -45,8 +46,15 @@ interface ShortLink {
   title: string | null
   description: string | null
   isActive: boolean
+  trackable: boolean
   clicks: number
   createdAt: string
+}
+
+interface MeUser {
+  isPremium: boolean
+  trackableUsed: number
+  trackableLimit: number | null
 }
 
 export function ShortLinksClient() {
@@ -195,6 +203,11 @@ export function ShortLinksClient() {
                         Paused
                       </span>
                     )}
+                    {!link.trackable && (
+                      <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        No analytics
+                      </span>
+                    )}
                   </div>
                   {link.title && <p className="mt-1 truncate text-sm font-medium">{link.title}</p>}
                   <a
@@ -210,19 +223,30 @@ export function ShortLinksClient() {
 
                 <div className="flex shrink-0 items-center gap-3">
                   <div className="text-center">
-                    <p className="text-lg font-bold leading-none">{formatCount(link.clicks)}</p>
-                    <p className="text-[10px] text-muted-foreground">clicks</p>
+                    {link.trackable ? (
+                      <>
+                        <p className="text-lg font-bold leading-none">{formatCount(link.clicks)}</p>
+                        <p className="text-[10px] text-muted-foreground">clicks</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-lg font-bold leading-none text-muted-foreground/40">—</p>
+                        <p className="text-[10px] text-muted-foreground">no analytics</p>
+                      </>
+                    )}
                   </div>
+                  {link.trackable && (
+                    <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-lg">
+                      <Link href={`/dashboard/shortlinks/${link.id}`}>
+                        <BarChart3 className="h-4 w-4" /> Analytics
+                      </Link>
+                    </Button>
+                  )}
                   <Switch
                     checked={link.isActive}
                     onCheckedChange={() => toggleActive(link)}
                     aria-label={link.isActive ? "Pause short link" : "Activate short link"}
                   />
-                  <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-lg">
-                    <Link href={`/dashboard/shortlinks/${link.id}`}>
-                      <BarChart3 className="h-4 w-4" /> Analytics
-                    </Link>
-                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -290,14 +314,41 @@ function CreateShortLinkDialog({
   const [destination, setDestination] = useState("")
   const [title, setTitle] = useState("")
   const [customSlug, setCustomSlug] = useState("")
+  const [trackable, setTrackable] = useState(true)
+  const [meUser, setMeUser] = useState<MeUser | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [quotaHit, setQuotaHit] = useState(false)
   const [created, setCreated] = useState<ShortLink | null>(null)
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (active && d.user) setMeUser(d.user as MeUser)
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
+
+  // Free accounts at the trackable limit: analytics is locked OFF here.
+  const premiumOrUnlimited = !meUser || meUser.isPremium || meUser.trackableLimit === null
+  const quotaUsedUp =
+    !premiumOrUnlimited && (meUser?.trackableUsed ?? 0) >= (meUser?.trackableLimit ?? 0)
+  const analyticsLocked = !premiumOrUnlimited && quotaUsedUp
+
+  useEffect(() => {
+    if (analyticsLocked) setTrackable(false)
+  }, [analyticsLocked])
 
   async function create() {
     setSaving(true)
     setError(null)
+    setQuotaHit(false)
     try {
       const res = await fetch("/api/shortlinks", {
         method: "POST",
@@ -306,15 +357,17 @@ function CreateShortLinkDialog({
           destination,
           title: title || undefined,
           customSlug: customSlug || undefined,
+          trackable,
         }),
       })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error ?? "Could not create the short link")
+        if (data.code === "TRACKABLE_QUOTA") setQuotaHit(true)
         return
       }
       setCreated(data.link)
-      toast.success("Short link created!")
+      toast.success(data.link.trackable ? "Short link created!" : "Short link created (no analytics)")
     } catch {
       setError("Network error — please try again")
     } finally {
@@ -409,10 +462,63 @@ function CreateShortLinkDialog({
               <p className="text-xs text-muted-foreground">3–32 chars: letters, numbers, - and _</p>
             </div>
 
+            {/* Click analytics toggle (premium-gated) */}
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Label htmlFor="trackable" className="text-sm font-medium">
+                    Click analytics
+                  </Label>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Track clicks, countries, devices & referrers
+                  </p>
+                </div>
+                <Switch
+                  id="trackable"
+                  checked={trackable && !analyticsLocked}
+                  disabled={analyticsLocked}
+                  onCheckedChange={(v) => setTrackable(v)}
+                  aria-label="Enable click analytics"
+                />
+              </div>
+              {analyticsLocked && (
+                <p className="mt-2.5 flex items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
+                  <Crown className="h-3.5 w-3.5 shrink-0" />
+                  Free limit reached ({meUser?.trackableUsed}/{meUser?.trackableLimit} tracked
+                  links){" — "}
+                  <Link href="/premium" className="font-semibold underline underline-offset-2">
+                    upgrade for unlimited
+                  </Link>
+                </p>
+              )}
+              {!analyticsLocked && !premiumOrUnlimited && meUser && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  {meUser.trackableUsed}/{meUser.trackableLimit} free tracked links used —{" "}
+                  <Link href="/premium" className="text-primary hover:underline">
+                    Premium removes the limit
+                  </Link>
+                </p>
+              )}
+            </div>
+
             {error && (
-              <p className="rounded-lg bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive" role="alert">
-                {error}
-              </p>
+              <div
+                className={cn(
+                  "rounded-lg px-3.5 py-2.5 text-sm",
+                  quotaHit ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
+                )}
+                role="alert"
+              >
+                <p>{error}</p>
+                {quotaHit && (
+                  <Link
+                    href="/premium"
+                    className="mt-1 inline-flex items-center gap-1.5 font-semibold underline underline-offset-2"
+                  >
+                    <Crown className="h-3.5 w-3.5" /> Upgrade to Premium — $3/month
+                  </Link>
+                )}
+              </div>
             )}
 
             <div className="flex justify-end gap-2">

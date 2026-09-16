@@ -299,6 +299,61 @@ Done — new users now receive real verification and password-reset emails.
 
 ---
 
+## 💳 Premium — selling $3/month upgrades (PayPal)
+
+FindLink has a built-in **Premium** plan: free accounts can create **2 short
+links with click analytics** (plus unlimited untracked links and unlimited
+free community submissions); **Premium ($3 / 30 days)** unlocks unlimited
+tracked links. Payments run through **PayPal Checkout** — no card data ever
+touches your server.
+
+### Turning it on (~5 min, no image rebuild)
+
+1. Go to **https://developer.paypal.com** → *Apps & Credentials* → **Live** tab
+   (or **Sandbox** to test first) → *Create App* → copy the **Client ID** and
+   **Secret** of your REST API app.
+2. Add them to `.env` on the VPS:
+   ```bash
+   cd ~/findlink
+   nano .env
+   # …
+   PAYPAL_CLIENT_ID=your_live_client_id
+   PAYPAL_CLIENT_SECRET=your_live_secret
+   PAYPAL_MODE=live            # sandbox = test mode
+   # ADMIN_EMAIL=you@example.com   # optional: who gets payment emails
+   docker compose up -d        # restart — done, premium page is live
+   ```
+   (or use the installer flags:
+   `./install.sh --paypal-client-id … --paypal-secret … --paypal-mode live`)
+3. Admin abilities: **Admin panel → Users & premium** — search any user,
+   *Make premium / Extend +30d / Revoke*; **Premium payments** section (plus
+   `GET /api/admin/payments`) lists every payment with buyer, amount, PayPal
+   order id and payer email. Every completed payment also emails the admin
+   (`ADMIN_EMAIL`, or every admin account by default) and receipts the buyer.
+
+### How the money flows (secure end-to-end)
+
+1. Your server **creates** the PayPal order with the amount fixed **server-side**
+   ($3.00 USD) and a `custom_id` binding the order to the paying user.
+2. The buyer approves on **PayPal's own popup/domain** — card data never
+   transits your server (PCI SAQ-A scope).
+3. Your server **captures** the order server-to-server and **verifies**:
+   order + capture status `COMPLETED`, exact amount + currency, and `custom_id`
+   matching the signed-in session. Any mismatch → no premium credited.
+4. A unique `orderId` row in the `Payment` table makes crediting exactly-once
+   (safe against double-clicks, retries and replays); renewals stack 30 days
+   onto the current expiry.
+
+Until credentials are set, the `/premium` page simply shows a
+"payments coming soon" card — nothing else changes.
+
+> 💡 **Testing:** set sandbox credentials + `PAYPAL_MODE=sandbox`, then pay
+> with the sandbox **personal** account (email + password visible under
+> *developer.paypal.com → Testing tools → Sandbox accounts*). Switch to
+> `live` + live credentials when done.
+
+---
+
 ## 🔁 Day-to-day operations
 
 ```bash
@@ -343,6 +398,12 @@ docker compose up -d
 | `EMAIL_FROM` | — | `FindLink <noreply@findlink.site>` (requires a Resend-verified domain) |
 | `ALLOWED_EMAIL_DOMAINS` | — | New registrations limited to these email domains — default **Gmail + iCloud** (`gmail.com,googlemail.com,icloud.com,me.com,mac.com`). Set `*` to allow any |
 | `NEXT_PUBLIC_GA_ID` | — | Google Analytics 4 measurement ID (gtag.js) — baked in at **build** time (GitHub Actions / `--build`), not read at runtime. Unset → `G-R6LJCEJD24` |
+| `PAYPAL_CLIENT_ID` | — | PayPal REST app **client id** (public) — enables the premium checkout when set together with the secret. Read at **runtime**: add to `.env` + `docker compose up -d`, no rebuild |
+| `PAYPAL_CLIENT_SECRET` | — | PayPal REST app **secret** — server-only, never sent to the browser |
+| `PAYPAL_MODE` | — | `sandbox` (default — test payments) or `live` (real money) |
+| `ADMIN_EMAIL` | — | Comma-separated recipients for payment-notification emails. Empty → every admin account |
+| `PREMIUM_PRICE_USD` | — | Premium price per period — default `3.00` (server-enforced on every order) |
+| `PREMIUM_DAYS` | — | Days of premium granted per payment — default `30` |
 
 After editing `.env`, always run `docker compose up -d` to apply.
 
@@ -418,6 +479,7 @@ After editing `.env`, always run `docker compose up -d` to apply.
 - Login is **timing-safe** (a dummy bcrypt compare runs for unknown emails, so response times can't be used to enumerate accounts); password-reset responses never reveal whether an email exists.
 - Request bodies are capped at 32 KB (`413` above that) — protects the 512 MB container from memory-exhaustion payloads.
 - `npm audit` is reviewed each release: remaining advisories (as of this release) are confined to the Prisma CLI **boot-time** dependency chain (config loading during `prisma db push`) — never in the request-serving path.
+- **Payments (PayPal Orders API v2):** amounts are fixed server-side (never accepted from the browser), captures are executed and verified server-to-server over HTTPS (status + capture status + amount + currency + `custom_id` user binding), crediting is idempotent via a unique `orderId` in the database, and all payment endpoints require a verified session and are rate-limited (6 order creates / 10 min, 12 captures / 10 min). Card data never touches this server — buyers authenticate on PayPal's domain. The PayPal SDK is allow-listed in the CSP (`frame-src`/`img-src`/`connect-src` for `*.paypal.com`, `*.paypalobjects.com`) while the nonce + `strict-dynamic` policy stays intact, and `Cross-Origin-Opener-Policy: same-origin-allow-popups` keeps the checkout popup handshake secure.
 
 ---
 

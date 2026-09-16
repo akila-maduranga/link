@@ -47,7 +47,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
 
   const link = await db.shortLink.findUnique({
     where: { slug },
-    select: { id: true, destination: true, isActive: true },
+    select: { id: true, destination: true, isActive: true, trackable: true },
   })
 
   if (!link || !link.isActive) {
@@ -67,35 +67,39 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
     })
   }
 
-  // Anti-abuse: cap event writes per IP per slug (bots hammering the same link)
-  const ip = clientIp(request)
-  const allowed = rateLimit(`hit:${slug}:${ip}`, 60, 60 * 1000).ok
+  // Untrackable links (free-tier): zero tracking of any kind — no click
+  // events, no counters. The redirect itself is identical.
+  if (link.trackable) {
+    // Anti-abuse: cap event writes per IP per slug (bots hammering the same link)
+    const ip = clientIp(request)
+    const allowed = rateLimit(`hit:${slug}:${ip}`, 60, 60 * 1000).ok
 
-  if (allowed) {
-    after(async () => {
-      try {
-        const ua = request.headers.get("user-agent")
-        const parsed = parseUserAgent(ua)
-        await db.shortLinkEvent.create({
-          data: {
-            shortLinkId: link.id,
-            ipHash: ip === "unknown" ? null : hashIp(ip),
-            country: countryFromHeaders(request),
-            referrer: referrerDomain(request.headers.get("referer")),
-            browser: parsed.browser,
-            os: parsed.os,
-            device: parsed.device,
-            isBot: parsed.isBot,
-          },
-        })
-        await db.shortLink.update({
-          where: { id: link.id },
-          data: { clicks: { increment: 1 } },
-        })
-      } catch (err) {
-        console.error("[redirect] failed to record click:", err)
-      }
-    })
+    if (allowed) {
+      after(async () => {
+        try {
+          const ua = request.headers.get("user-agent")
+          const parsed = parseUserAgent(ua)
+          await db.shortLinkEvent.create({
+            data: {
+              shortLinkId: link.id,
+              ipHash: ip === "unknown" ? null : hashIp(ip),
+              country: countryFromHeaders(request),
+              referrer: referrerDomain(request.headers.get("referer")),
+              browser: parsed.browser,
+              os: parsed.os,
+              device: parsed.device,
+              isBot: parsed.isBot,
+            },
+          })
+          await db.shortLink.update({
+            where: { id: link.id },
+            data: { clicks: { increment: 1 } },
+          })
+        } catch (err) {
+          console.error("[redirect] failed to record click:", err)
+        }
+      })
+    }
   }
 
   return NextResponse.redirect(destination, {

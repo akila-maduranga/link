@@ -106,6 +106,128 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 }
 
+/* --------------------------- Premium payment emails ------------------------ */
+
+/**
+ * Who receives payment notifications: the ADMIN_EMAIL env override first
+ * (comma-separated allowed), else every ADMIN account (capped at 5).
+ */
+export async function getAdminRecipients(): Promise<string[]> {
+  const envList = (process.env.ADMIN_EMAIL || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e.includes("@"))
+  if (envList.length > 0) return envList
+
+  try {
+    const { db } = await import("@/lib/db")
+    const admins = await db.user.findMany({
+      where: { role: "ADMIN" },
+      select: { email: true },
+      take: 5,
+      orderBy: { createdAt: "asc" },
+    })
+    return admins.map((a) => a.email)
+  } catch {
+    return []
+  }
+}
+
+function money(amount: string, currency: string): string {
+  return `${escapeHtml(amount)} ${escapeHtml(currency)}`
+}
+
+function when(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(date) + " UTC"
+}
+
+/** Notify the site admin(s) that a premium payment landed. */
+export async function sendPremiumPaymentEmail(details: {
+  buyerName: string
+  buyerEmail: string
+  amount: string
+  currency: string
+  orderId: string
+  payerEmail: string | null
+  days: number
+  premiumUntil: Date
+}): Promise<void> {
+  const recipients = await getAdminRecipients()
+  if (recipients.length === 0) {
+    console.warn("[email] no admin recipients for payment notification")
+    return
+  }
+
+  const html = emailShell(
+    "New premium payment received",
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+       <tr><td style="padding:8px 0;color:#7d8f86;font-size:13px;width:130px;">Buyer</td>
+           <td style="padding:8px 0;color:#f4faf7;font-size:14px;">${escapeHtml(details.buyerName)} &lt;${escapeHtml(details.buyerEmail)}&gt;</td></tr>
+       <tr><td style="padding:8px 0;color:#7d8f86;font-size:13px;">Amount</td>
+           <td style="padding:8px 0;color:#34d399;font-size:14px;font-weight:700;">${money(details.amount, details.currency)}</td></tr>
+       <tr><td style="padding:8px 0;color:#7d8f86;font-size:13px;">Granted</td>
+           <td style="padding:8px 0;color:#f4faf7;font-size:14px;">${details.days} days of Premium (active until ${when(details.premiumUntil)})</td></tr>
+       <tr><td style="padding:8px 0;color:#7d8f86;font-size:13px;">PayPal order</td>
+           <td style="padding:8px 0;color:#c9d7d0;font-size:13px;font-family:monospace;">${escapeHtml(details.orderId)}</td></tr>
+       ${details.payerEmail && details.payerEmail.toLowerCase() !== details.buyerEmail.toLowerCase()
+         ? `<tr><td style="padding:8px 0;color:#7d8f86;font-size:13px;">PayPal account</td>
+            <td style="padding:8px 0;color:#c9d7d0;font-size:13px;">${escapeHtml(details.payerEmail)}</td></tr>`
+         : ""}
+     </table>
+     <p style="margin:20px 0 0 0;color:#7d8f86;font-size:12px;line-height:18px;">
+       This notification was generated automatically after a verified PayPal capture. The full payment history is available in the admin panel.
+     </p>`
+  )
+
+  for (const to of recipients) {
+    await deliver(
+      to,
+      `New premium payment — ${details.amount} ${details.currency} from ${details.buyerEmail}`,
+      html,
+      `${baseUrl()}/admin`
+    )
+  }
+}
+
+/** Email receipt for the buyer. */
+export async function sendPremiumReceiptEmail(
+  to: string,
+  name: string,
+  details: { amount: string; currency: string; days: number; premiumUntil: Date; orderId: string }
+): Promise<void> {
+  const html = emailShell(
+    "Your premium is active",
+    `<p style="margin:0 0 8px 0;color:#c9d7d0;font-size:15px;line-height:24px;">Hi ${escapeHtml(name)},</p>
+     <p style="margin:0;color:#c9d7d0;font-size:15px;line-height:24px;">
+       Thank you! Your payment of <strong style="color:#34d399;">${money(details.amount, details.currency)}</strong>
+       was received and <strong>FindLink Premium</strong> is now active on your account.
+     </p>
+     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:16px;">
+       <tr><td style="padding:8px 0;color:#7d8f86;font-size:13px;width:130px;">Active until</td>
+           <td style="padding:8px 0;color:#f4faf7;font-size:14px;">${when(details.premiumUntil)}</td></tr>
+       <tr><td style="padding:8px 0;color:#7d8f86;font-size:13px;">Includes</td>
+           <td style="padding:8px 0;color:#c9d7d0;font-size:14px;">Unlimited trackable short links</td></tr>
+       <tr><td style="padding:8px 0;color:#7d8f86;font-size:13px;">Order</td>
+           <td style="padding:8px 0;color:#c9d7d0;font-size:13px;font-family:monospace;">${escapeHtml(details.orderId)}</td></tr>
+     </table>
+     ${buttonHtml(`${baseUrl()}/dashboard/shortlinks`, "Open dashboard")}
+     <p style="margin:16px 0 0 0;color:#7d8f86;font-size:12px;line-height:18px;">
+       When your premium period ends, short links keep working — you can renew from the premium page for another ${details.days} days.
+     </p>`
+  )
+
+  await deliver(
+    to,
+    `Your ${BRAND} Premium receipt — ${details.amount} ${details.currency}`,
+    html,
+    `${baseUrl()}/premium`
+  )
+}
+
 async function deliver(to: string, subject: string, html: string, devUrl: string): Promise<EmailResult> {
   const client = getClient()
   if (!client) {

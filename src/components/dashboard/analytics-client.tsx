@@ -16,6 +16,8 @@ import {
   Bot,
   Check,
   Copy,
+  Crown,
+  EyeOff,
   ExternalLink,
   Fingerprint,
   Loader2,
@@ -54,6 +56,7 @@ interface ShortLinkInfo {
   destination: string
   title: string | null
   isActive: boolean
+  trackable: boolean
   clicks: number
 }
 
@@ -98,8 +101,37 @@ export function AnalyticsClient({ link }: { link: ShortLinkInfo }) {
   }, [link.id, range])
 
   useEffect(() => {
-    load()
-  }, [load])
+    if (link.trackable) load()
+    else setLoading(false)
+  }, [load, link.trackable])
+
+  /* Untrackable (free-tier) link: analytics were never recorded — show a
+     friendly upsell state instead of an empty dashboard. */
+  if (!link.trackable) {
+    return (
+      <div className="space-y-6">
+        <Button asChild variant="ghost" size="sm" className="-ml-2 gap-1.5 rounded-lg">
+          <Link href="/dashboard/shortlinks">
+            <ArrowLeft className="h-4 w-4" /> All short links
+          </Link>
+        </Button>
+        <div className="rounded-2xl border border-dashed border-border bg-card/40 px-6 py-16 text-center">
+          <EyeOff className="mx-auto h-10 w-10 text-muted-foreground/60" />
+          <h1 className="mt-4 text-lg font-semibold">Analytics are off for this link</h1>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+            <span className="font-mono font-semibold">/s/{link.slug}</span> was created without
+            click tracking — it redirects normally, but no analytics are recorded. Free accounts
+            can track up to 2 short links; premium unlocks analytics on every link you create.
+          </p>
+          <Button asChild className="mt-6 rounded-xl font-semibold">
+            <Link href="/premium">
+              <Crown className="h-4 w-4" /> Upgrade to Premium — $3/month
+            </Link>
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   async function copy() {
     await navigator.clipboard.writeText(`${window.location.origin}/s/${link.slug}`)

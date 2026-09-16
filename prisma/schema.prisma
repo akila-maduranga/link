@@ -20,11 +20,15 @@ model User {
   resetToken     String?   @unique
   resetTokenExp  DateTime?
   lastEmailSent  DateTime?
+  // Premium entitlement: active while premiumUntil is in the future.
+  // Extended by successful PayPal captures or manual admin grants.
+  premiumUntil   DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   links      Link[]
   shortLinks ShortLink[]
+  payments   Payment[]
 }
 
 // Directory links: social media groups / channels submitted by users
@@ -56,7 +60,9 @@ model Link {
   @@index([userId, createdAt])
 }
 
-// Shortened URLs with detailed analytics
+// Shortened URLs with detailed analytics. `trackable` gates per-click
+// analytics: free accounts get 2 trackable links, unlimited untrackable
+// ones; premium accounts are unlimited in both.
 model ShortLink {
   id          String   @id @default(cuid())
   slug        String   @unique
@@ -64,6 +70,7 @@ model ShortLink {
   title       String?
   description String?
   isActive    Boolean  @default(true)
+  trackable   Boolean  @default(true)
   clicks      Int      @default(0)
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -73,6 +80,27 @@ model ShortLink {
   events ShortLinkEvent[]
 
   @@index([userId, createdAt])
+}
+
+// Successful premium purchases / grants. The unique orderId is the
+// idempotency guard: a PayPal order can only ever credit a user once.
+model Payment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId     String   @unique // PayPal order id (or admin-grant cuid)
+  captureId   String? // PayPal capture id (needed for refunds)
+  amount      String // e.g. "3.00" — "0.00" for admin grants
+  currency    String   @default("USD")
+  status      String   @default("COMPLETED")
+  payerEmail  String? // PayPal buyer email
+  payerName   String?
+  daysGranted Int      @default(30)
+  source      String   @default("PAYPAL") // PAYPAL | ADMIN
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 // One row per click on a shortened link

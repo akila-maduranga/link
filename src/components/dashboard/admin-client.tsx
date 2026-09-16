@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import {
   BadgeCheck,
+  Crown,
+  CreditCard,
   Eye,
   EyeOff,
   Loader2,
@@ -45,6 +47,9 @@ interface AdminStats {
     shortLinks: number
     clicks: number
     events: number
+    premiumActive: number
+    paypalPayments: number
+    revenue: { total: string; currency: string }[]
   }
   recentUsers: {
     id: string
@@ -53,8 +58,35 @@ interface AdminStats {
     createdAt: string
     emailVerified: string | null
     role: string
+    premiumUntil: string | null
+    isPremium: boolean
   }[]
   recentLinks: AdminLink[]
+}
+
+interface AdminUser {
+  id: string
+  name: string
+  email: string
+  role: string
+  emailVerified: string | null
+  premiumUntil: string | null
+  isPremium: boolean
+  createdAt: string
+}
+
+interface AdminPayment {
+  id: string
+  amount: string
+  currency: string
+  status: string
+  orderId: string
+  payerEmail: string | null
+  payerName: string | null
+  daysGranted: number
+  source: string
+  createdAt: string
+  user: { id: string; name: string; email: string; premiumUntil: string | null }
 }
 
 interface AdminLink {
@@ -82,6 +114,17 @@ export function AdminClient() {
   const [query, setQuery] = useState("")
   const [deleting, setDeleting] = useState<AdminLink | null>(null)
 
+  // Users & premium management
+  const [users, setUsers] = useState<AdminUser[]>([])
+  const [usersLoading, setUsersLoading] = useState(true)
+  const [userQuery, setUserQuery] = useState("")
+  const [premiumBusy, setPremiumBusy] = useState<string | null>(null)
+
+  // Payment history
+  const [payments, setPayments] = useState<AdminPayment[]>([])
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
+  const [paySource, setPaySource] = useState("")
+
   const loadStats = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/stats")
@@ -91,6 +134,45 @@ export function AdminClient() {
       setLoading(false)
     }
   }, [])
+
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true)
+    try {
+      const params = new URLSearchParams({ pageSize: "20" })
+      if (userQuery.trim()) params.set("q", userQuery.trim())
+      const res = await fetch(`/api/admin/users?${params}`)
+      const data = await res.json()
+      if (data.ok) setUsers(data.users)
+    } finally {
+      setUsersLoading(false)
+    }
+  }, [userQuery])
+
+  const loadPayments = useCallback(async () => {
+    setPaymentsLoading(true)
+    try {
+      const params = new URLSearchParams({ pageSize: "20" })
+      if (paySource) params.set("source", paySource)
+      const res = await fetch(`/api/admin/payments?${params}`)
+      const data = await res.json()
+      if (data.ok) setPayments(data.payments)
+    } finally {
+      setPaymentsLoading(false)
+    }
+  }, [paySource])
+
+  useEffect(() => {
+    loadStats()
+  }, [loadStats])
+
+  useEffect(() => {
+    loadPayments()
+  }, [loadPayments])
+
+  useEffect(() => {
+    const t = setTimeout(loadUsers, userQuery ? 300 : 0)
+    return () => clearTimeout(t)
+  }, [loadUsers, userQuery])
 
   const loadLinks = useCallback(async () => {
     setLinksLoading(true)
@@ -150,6 +232,27 @@ export function AdminClient() {
     }
   }
 
+  async function setPremium(user: AdminUser, action: "grant" | "revoke") {
+    setPremiumBusy(user.id)
+    try {
+      const res = await fetch("/api/admin/users/premium", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, action }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error ?? "Update failed")
+        return
+      }
+      toast.success(data.message)
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, ...data.user } : u)))
+      loadStats()
+    } finally {
+      setPremiumBusy(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -170,12 +273,21 @@ export function AdminClient() {
       </div>
 
       {/* Totals */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {[
           { label: "Users", value: t?.users ?? 0, sub: `${t?.verified ?? 0} verified`, icon: Users },
           { label: "Listings", value: t?.links ?? 0, sub: `${t?.hiddenLinks ?? 0} hidden · ${t?.featuredLinks ?? 0} featured`, icon: Link2 },
           { label: "Short links", value: t?.shortLinks ?? 0, sub: `${formatCount(t?.events ?? 0)} tracked events`, icon: Zap },
           { label: "Tracked clicks", value: t?.clicks ?? 0, sub: "all-time on short links", icon: MousePointerClick },
+          {
+            label: "Premium",
+            value: t?.premiumActive ?? 0,
+            sub:
+              (t?.revenue?.length ?? 0) > 0
+                ? `${t?.paypalPayments ?? 0} payments · ${t!.revenue.map((r) => `${r.total} ${r.currency}`).join(" · ")} collected`
+                : `${t?.paypalPayments ?? 0} payments · no revenue yet`,
+            icon: Crown,
+          },
         ].map((c) => (
           <div key={c.label} className="rounded-2xl border border-border/60 bg-card p-5">
             <c.icon className="h-4.5 w-4.5 text-primary" />
@@ -316,6 +428,11 @@ export function AdminClient() {
                       {u.role === "ADMIN" && (
                         <Badge className="ml-1.5 rounded text-[9px]">ADMIN</Badge>
                       )}
+                      {u.isPremium && (
+                        <Badge className="ml-1.5 rounded bg-primary/15 text-[9px] text-primary">
+                          <Crown className="mr-0.5 h-2.5 w-2.5" /> PREMIUM
+                        </Badge>
+                      )}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">{u.email}</p>
                   </div>
@@ -333,6 +450,183 @@ export function AdminClient() {
           </ul>
         </section>
       </div>
+
+      {/* Users & premium management */}
+      <section aria-labelledby="users-heading">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="users-heading" className="flex items-center gap-2 text-lg font-semibold">
+            <Crown className="h-4.5 w-4.5 text-primary" /> Users &amp; premium
+          </h2>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={userQuery}
+              onChange={(e) => setUserQuery(e.target.value)}
+              placeholder="Search users by name or email…"
+              className="h-9 w-56 rounded-lg bg-card pl-9"
+              aria-label="Search users"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          {usersLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
+          ) : users.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-border bg-card/40 py-12 text-center text-sm text-muted-foreground">
+              No users match this search.
+            </p>
+          ) : (
+            users.map((u) => (
+              <div
+                key={u.id}
+                className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-3.5 sm:flex-row sm:items-center"
+              >
+                <span
+                  className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-xs font-bold",
+                    u.isPremium ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {u.isPremium ? <Crown className="h-4 w-4" /> : u.name.slice(0, 1).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <p className="truncate text-sm font-medium">{u.name}</p>
+                    {u.role === "ADMIN" && <Badge className="rounded text-[9px]">ADMIN</Badge>}
+                    {u.isPremium ? (
+                      <Badge className="rounded bg-primary/15 text-[9px] text-primary">
+                        PREMIUM · until{" "}
+                        {u.premiumUntil ? new Date(u.premiumUntil).toLocaleDateString() : "—"}
+                      </Badge>
+                    ) : (
+                      <span className="text-[10px] font-medium text-muted-foreground">free</span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {u.email} · {u.emailVerified ? "verified" : "pending"} · joined{" "}
+                    {formatDate(u.createdAt)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={u.isPremium ? "outline" : "default"}
+                    className="h-8 rounded-lg text-xs font-semibold"
+                    disabled={premiumBusy === u.id}
+                    onClick={() => setPremium(u, "grant")}
+                  >
+                    {premiumBusy === u.id && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {u.isPremium ? "Extend +30d" : "Make premium"}
+                  </Button>
+                  {u.isPremium && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 rounded-lg text-xs text-destructive hover:text-destructive"
+                      disabled={premiumBusy === u.id}
+                      onClick={() => setPremium(u, "revoke")}
+                    >
+                      Revoke
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      {/* Payment history */}
+      <section aria-labelledby="payments-heading">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="payments-heading" className="flex items-center gap-2 text-lg font-semibold">
+            <CreditCard className="h-4.5 w-4.5 text-primary" /> Premium payments
+          </h2>
+          <div className="flex gap-1">
+            {[
+              { id: "", label: "All" },
+              { id: "PAYPAL", label: "PayPal" },
+              { id: "ADMIN", label: "Admin grants" },
+            ].map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setPaySource(f.id)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                  paySource === f.id
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-border bg-card text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {stats && (stats.totals.revenue?.length ?? 0) > 0 && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Collected via PayPal:{" "}
+            <strong className="text-foreground">
+              {stats.totals.revenue.map((r) => `${r.total} ${r.currency}`).join(" · ")}
+            </strong>{" "}
+            across {stats.totals.paypalPayments} payment{stats.totals.paypalPayments === 1 ? "" : "s"}.
+          </p>
+        )}
+
+        <div className="mt-4 space-y-2">
+          {paymentsLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
+          ) : payments.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-border bg-card/40 py-12 text-center text-sm text-muted-foreground">
+              No premium payments yet. PayPal purchases and admin grants will appear here.
+            </p>
+          ) : (
+            payments.map((p) => (
+              <div
+                key={p.id}
+                className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-3.5 sm:flex-row sm:items-center"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <p className="truncate text-sm font-medium">
+                      {p.user.name}{" "}
+                      <span className="font-normal text-muted-foreground">({p.user.email})</span>
+                    </p>
+                    {p.source === "PAYPAL" ? (
+                      <Badge className="rounded bg-primary/15 text-[9px] text-primary">PAYPAL</Badge>
+                    ) : (
+                      <Badge className="rounded text-[9px]">ADMIN GRANT</Badge>
+                    )}
+                  </div>
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                    {p.orderId}
+                    {p.payerEmail && p.payerEmail.toLowerCase() !== p.user.email.toLowerCase()
+                      ? ` · paid from ${p.payerEmail}`
+                      : ""}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-4">
+                  <div className="text-right">
+                    <p className="text-sm font-bold">
+                      {p.source === "PAYPAL" ? `${p.amount} ${p.currency}` : "grant"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">+{p.daysGranted} days</p>
+                  </div>
+                  <p className="hidden text-[11px] text-muted-foreground/70 sm:block">
+                    {formatDate(p.createdAt)}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
 
       {/* Delete confirm */}
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
