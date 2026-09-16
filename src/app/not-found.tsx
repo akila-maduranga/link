@@ -1,6 +1,12 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Compass } from "lucide-react"
 import { Button } from "@/components/ui/button"
+
+// 404s must never enter the search index.
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 export default function NotFound() {
   return (

@@ -7,12 +7,20 @@ import { db } from "@/lib/db"
 import { LinkCard } from "@/components/links/link-card"
 import { PlatformIcon } from "@/components/brand-icons"
 import { getPlatform } from "@/data/platforms"
+import { PLATFORM_SEO } from "@/data/platform-seo"
 import { getCategory } from "@/data/categories"
 import { countryFlag, countryName } from "@/data/countries"
 import { languageName } from "@/data/languages"
 import { formatCount, formatDate } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { JsonLd } from "@/components/seo/json-ld"
+import {
+  absoluteUrl,
+  breadcrumbSchema,
+  OG_IMAGE_PATH,
+  type BreadcrumbItem,
+} from "@/lib/seo"
 
 export const dynamic = "force-dynamic"
 
@@ -31,15 +39,37 @@ export async function generateMetadata({
   const { slug } = await params
   const link = await getLink(slug)
   if (!link) return { title: "Link not found" }
+
+  const platform = getPlatform(link.platform)
+  const category = getCategory(link.category)
+  const title = `${link.title} — ${platform.name} ${platform.label.toLowerCase()}`
+  const description =
+    link.description?.slice(0, 180) ||
+    `Discover ${link.title}, a ${platform.name} ${platform.label.toLowerCase()} in ${category.name}, on FindLink — the free community link directory.`
+
   return {
-    title: link.title,
-    description:
-      link.description ??
-      `${link.title} — a ${getPlatform(link.platform).name} ${getPlatform(link.platform).label.toLowerCase()} on FindLink`,
+    title,
+    description,
+    keywords: [
+      link.title,
+      `${platform.name} ${platform.label.toLowerCase()}`,
+      category.name,
+      countryName(link.country).split(" /")[0],
+    ],
+    alternates: { canonical: `/link/${link.slug}` },
     openGraph: {
-      title: link.title,
-      description: link.description ?? `Discover ${link.title} on FindLink`,
+      title,
+      description,
+      url: `/link/${link.slug}`,
+      siteName: "FindLink",
       type: "website",
+      images: [{ url: OG_IMAGE_PATH, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [OG_IMAGE_PATH],
     },
   }
 }
@@ -75,11 +105,53 @@ export default async function LinkDetailPage({
     take: 3,
   })
 
+  // Breadcrumb mirrors the visible navigation: Home → Explore → platform
+  // directory → listing. Absolute URLs per schema.org requirements.
+  const breadcrumbs: BreadcrumbItem[] = [
+    { name: "Home", url: absoluteUrl("/") },
+    { name: "Explore", url: absoluteUrl("/explore") },
+    {
+      name: PLATFORM_SEO[link.platform]?.heading ?? `${platform.name} directory`,
+      url: absoluteUrl(`/explore/${link.platform}`),
+    },
+    { name: link.title, url: absoluteUrl(`/link/${link.slug}`) },
+  ]
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+      <JsonLd data={breadcrumbSchema(breadcrumbs)} />
+
+      <nav aria-label="Breadcrumb" className="mb-4 -ml-2">
+        <ol className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <li>
+            <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2 text-muted-foreground">
+              <Link href="/" className="gap-1">Home</Link>
+            </Button>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li>
+            <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2 text-muted-foreground">
+              <Link href="/explore" className="gap-1">Explore</Link>
+            </Button>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li>
+            <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2 text-muted-foreground">
+              <Link href={`/explore/${link.platform}`} className="gap-1">
+                {PLATFORM_SEO[link.platform]?.heading ?? `${platform.name} directory`}
+              </Link>
+            </Button>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li aria-current="page" className="ml-1 max-w-[14rem] truncate font-medium text-foreground">
+            {link.title}
+          </li>
+        </ol>
+      </nav>
+
       <Button asChild variant="ghost" size="sm" className="mb-6 -ml-2 rounded-lg text-muted-foreground">
-        <Link href="/explore" className="gap-1.5">
-          <ArrowLeft className="h-4 w-4" /> Back to directory
+        <Link href={`/explore?platform=${link.platform}`} className="gap-1.5">
+          <ArrowLeft className="h-4 w-4" /> Back to {platform.name} {platform.label.toLowerCase()}s
         </Link>
       </Button>
 

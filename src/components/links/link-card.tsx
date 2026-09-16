@@ -71,12 +71,16 @@ export function LinkCard({ link, compact = false }: { link: DirectoryLink; compa
         </span>
 
         <div className="min-w-0 flex-1">
-          <Link
-            href={`/link/${link.slug}`}
-            className="block truncate text-base font-semibold leading-snug transition-colors group-hover:text-primary"
-          >
-            {link.title}
-          </Link>
+          {/* h3: listing pages render h1 (page) → h2 (section) → h3 (card),
+              giving crawlers a clean heading hierarchy on directory grids. */}
+          <h3 className="truncate text-base font-semibold leading-snug">
+            <Link
+              href={`/link/${link.slug}`}
+              className="block truncate transition-colors group-hover:text-primary"
+            >
+              {link.title}
+            </Link>
+          </h3>
           <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
             <span className="font-medium" style={{ color: platform.color }}>{platform.name}</span>
             {link.members && (

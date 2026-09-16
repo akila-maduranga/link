@@ -368,6 +368,38 @@ Until credentials are set, the `/premium` page simply shows a
 
 ---
 
+## 🔎 SEO — sitemap, robots & structured data
+
+The site ships fully search-optimized. Nothing to enable — it works on every deploy:
+
+| What | Where | Notes |
+|------|-------|-------|
+| **XML sitemap** | `/sitemap.xml` | Generated per request: static pages + all 15 platform directory pages (`/explore/telegram`, `/explore/whatsapp`, …) + every active listing. `lastmod` comes from real database timestamps — no fake dates |
+| **robots.txt** | `/robots.txt` | Public pages allowed; `/api/`, `/dashboard`, `/admin`, `/go/`, `/s/` and the one-time email/password-token pages are excluded so crawlers spend their budget on indexable content. Points at the sitemap |
+| **Platform landing pages** | `/explore/[platform]` | Server-rendered listings (no client fetch waterfall) with unique per-platform titles, descriptions, keywords and intro copy — the pages that target "telegram channels", "whatsapp group links", "discord servers" style searches |
+| **Structured data (JSON-LD)** | every public page | `WebSite` + `SearchAction` (sitelinks search box), `Organization`, `BreadcrumbList`, `CollectionPage`/`ItemList` on directory pages, `Product`+`Offer` on `/premium`. All server-rendered with absolute URLs |
+| **Canonical URLs** | every public page | One canonical URL per page, matching the sitemap exactly (apex, no trailing slash); `www.` → apex is already a 301 via Caddy |
+| **Social cards** | `og-image.png` | Branded 1200×630 Open Graph / Twitter card on every shareable page |
+| **Private surfaces** | meta robots | Dashboard, admin, 404s and token pages are `noindex` — they never dilute crawl quality |
+
+**Claim your site in Google Search Console** (~5 min, recommended):
+
+1. At [search.google.com/search-console](https://search.google.com/search-console) add the property `https://findlink.site`.
+2. Choose the **HTML tag** verification method and copy the `content` value.
+3. Add it to `.env` and restart:
+   ```bash
+   NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION=abc123...token...xyz
+   docker compose up -d
+   ```
+   (The meta tag is baked in at image build time; to activate it without a rebuild, also set it as a GitHub Actions variable `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` and let the next image build pick it up.)
+4. Submit `https://findlink.site/sitemap.xml` in the Sitemaps section. New listings appear in the sitemap the moment they're approved — no rebuild needed.
+
+**Bing Webmaster Tools** works the same way (import from Search Console, then submit the sitemap).
+
+> Sitemap & robots are plain routes served by the app — no extra container, cron job or config file to maintain.
+
+---
+
 ## 🔁 Day-to-day operations
 
 ```bash
@@ -413,6 +445,7 @@ docker compose up -d
 | `EMAIL_FROM` | — | `FindLink <noreply@findlink.site>` (requires a Resend-verified domain) |
 | `ALLOWED_EMAIL_DOMAINS` | — | New registrations limited to these email domains — default **Gmail + iCloud** (`gmail.com,googlemail.com,icloud.com,me.com,mac.com`). Set `*` to allow any |
 | `NEXT_PUBLIC_GA_ID` | — | Google Analytics 4 measurement ID (gtag.js) — baked in at **build** time (GitHub Actions / `--build`), not read at runtime. Unset → `G-R6LJCEJD24` |
+| `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` | — | Google Search Console verification token (the `content` of the HTML-tag method) — emits `<meta name="google-site-verification">`. Baked in at build time like `NEXT_PUBLIC_GA_ID` |
 | `PAYPAL_CLIENT_ID` | — | PayPal REST app **client id** (public) — enables the premium checkout when set together with the secret. Read at **runtime**: add to `.env` + `docker compose up -d`, no rebuild |
 | `PAYPAL_CLIENT_SECRET` | — | PayPal REST app **secret** — server-only, never sent to the browser |
 | `PAYPAL_MODE` | — | `sandbox` (default — test payments) or `live` (real money) |

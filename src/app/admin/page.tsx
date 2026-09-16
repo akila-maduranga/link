@@ -5,7 +5,10 @@ import { AdminClient } from "@/components/dashboard/admin-client"
 
 export const dynamic = "force-dynamic"
 
-export const metadata: Metadata = { title: "Admin panel" }
+export const metadata: Metadata = {
+  title: "Admin panel",
+  robots: { index: false, follow: false }, // private, auth-only surface
+}
 
 export default async function AdminPage() {
   const session = await getSession()

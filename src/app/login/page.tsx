@@ -8,7 +8,12 @@ export const dynamic = "force-dynamic"
 
 // SSR (not prerendered): per-request CSP nonces from src/proxy.ts only apply to dynamically
 // rendered responses — a prerendered shell would ship nonce-less scripts that strict-dynamic blocks.
-export const metadata: Metadata = { title: "Sign in" }
+export const metadata: Metadata = {
+  title: "Sign in",
+  description:
+    "Sign in to FindLink to manage your directory listings, shorten URLs and track every click with detailed analytics.",
+  alternates: { canonical: "/login" },
+}
 
 export default async function LoginPage({
   searchParams,

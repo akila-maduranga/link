@@ -2,13 +2,45 @@ import type { Metadata } from "next"
 import { Crown, ShieldCheck, Zap, BarChart3, Link2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { PremiumClient } from "@/components/premium/premium-client"
+import { JsonLd } from "@/components/seo/json-ld"
+import { premiumDays, premiumPrice } from "@/lib/premium"
+import {
+  OG_IMAGE_PATH,
+  absoluteUrl,
+  breadcrumbSchema,
+  premiumProductSchema,
+} from "@/lib/seo"
 
 export const dynamic = "force-dynamic"
 
 export const metadata: Metadata = {
-  title: "Premium — unlimited tracked short links",
+  title: "Premium — Unlimited Tracked Short Links for $3/month",
   description:
-    "FindLink Premium: unlimited short links with full click analytics for $3 a month. Free accounts keep 2 tracked links and unlimited communities.",
+    "FindLink Premium: unlimited short links with full click analytics — country, device, browser and referrer — for $3 a month. Free accounts keep 2 tracked links and unlimited communities.",
+  keywords: [
+    "url shortener with analytics",
+    "link tracking",
+    "click analytics",
+    "track link clicks",
+    "premium link shortener",
+    "url shortener pricing",
+  ],
+  alternates: { canonical: "/premium" },
+  openGraph: {
+    title: "FindLink Premium — unlimited tracked short links",
+    description:
+      "Unlimited short links with full click analytics for $3 a month. See who clicks your links — country, device, browser and referrer.",
+    url: "/premium",
+    siteName: "FindLink",
+    type: "website",
+    images: [{ url: OG_IMAGE_PATH, width: 1200, height: 630, alt: "FindLink Premium" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "FindLink Premium — unlimited tracked short links",
+    description: "Unlimited short links with full click analytics for $3 a month.",
+    images: [OG_IMAGE_PATH],
+  },
 }
 
 const COMPARISON: Array<{ label: string; free: string; premium: string }> = [
@@ -22,6 +54,19 @@ const COMPARISON: Array<{ label: string; free: string; premium: string }> = [
 export default function PremiumPage() {
   return (
     <main className="mx-auto w-full max-w-5xl px-4 pb-20 pt-10 sm:px-6 sm:pt-16 lg:px-8">
+      {/* Product/Offer structured data — truthful values from the same
+          pricing helpers the checkout uses. (FAQPage is deliberately NOT
+          used: rich results for it are restricted to authority sites.) */}
+      <JsonLd
+        data={[
+          premiumProductSchema({ price: premiumPrice(), days: premiumDays() }),
+          breadcrumbSchema([
+            { name: "Home", url: absoluteUrl("/") },
+            { name: "Premium", url: absoluteUrl("/premium") },
+          ]),
+        ]}
+      />
+
       {/* Hero */}
       <div className="text-center">
         <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-sm font-semibold text-primary">

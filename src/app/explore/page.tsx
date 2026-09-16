@@ -1,15 +1,34 @@
 import { Suspense } from "react"
 import type { Metadata } from "next"
 import { ExploreClient } from "@/components/links/explore-client"
+import { JsonLd } from "@/components/seo/json-ld"
+import { absoluteUrl, collectionSchema } from "@/lib/seo"
 
 export const dynamic = "force-dynamic"
 
 // SSR (not prerendered): per-request CSP nonces from src/proxy.ts only apply to dynamically
 // rendered responses — a prerendered shell would ship nonce-less scripts that strict-dynamic blocks.
 export const metadata: Metadata = {
-  title: "Explore",
+  title: "Explore the Link Directory — Telegram, WhatsApp & More",
   description:
-    "Browse the FindLink directory — Telegram channels, WhatsApp groups, Facebook pages and more, filtered by category, country and language.",
+    "Search and filter the full FindLink community directory: Telegram channels, WhatsApp groups, Facebook pages, YouTube channels, Discord servers and more — by category, country and language.",
+  keywords: [
+    "link directory",
+    "community directory",
+    "explore communities",
+    "telegram channel directory",
+    "whatsapp group links",
+    "find online communities",
+  ],
+  alternates: { canonical: "/explore" },
+  openGraph: {
+    title: "Explore the Link Directory — Telegram, WhatsApp & More",
+    description:
+      "Thousands of communities, filterable by platform, category, country and language.",
+    url: "/explore",
+    siteName: "FindLink",
+    type: "website",
+  },
 }
 
 export default function ExplorePage() {
@@ -21,6 +40,17 @@ export default function ExplorePage() {
         </div>
       }
     >
+      {/* Directory-level CollectionPage (no fixed item list — filters are
+          client-side, so the entity describes the collection itself) */}
+      <JsonLd
+        data={collectionSchema({
+          name: "FindLink community directory",
+          description:
+            "The full FindLink directory of social communities — Telegram channels, WhatsApp groups, Facebook pages and more, filterable by category, country and language.",
+          url: absoluteUrl("/explore"),
+          items: [],
+        })}
+      />
       <ExploreClient />
     </Suspense>
   )

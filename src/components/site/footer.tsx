@@ -42,10 +42,11 @@ export function Footer({ authed = false }: { authed?: boolean }) {
           <nav aria-label="Platforms">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Top platforms</h3>
             <ul className="mt-4 space-y-3 text-sm">
-              <li><Link href="/explore?platform=telegram" className="text-muted-foreground transition-colors hover:text-foreground">Telegram channels</Link></li>
-              <li><Link href="/explore?platform=whatsapp" className="text-muted-foreground transition-colors hover:text-foreground">WhatsApp groups</Link></li>
-              <li><Link href="/explore?platform=facebook" className="text-muted-foreground transition-colors hover:text-foreground">Facebook groups</Link></li>
-              <li><Link href="/explore?platform=youtube" className="text-muted-foreground transition-colors hover:text-foreground">YouTube channels</Link></li>
+              <li><Link href="/explore/telegram" className="text-muted-foreground transition-colors hover:text-foreground">Telegram channels</Link></li>
+              <li><Link href="/explore/whatsapp" className="text-muted-foreground transition-colors hover:text-foreground">WhatsApp groups</Link></li>
+              <li><Link href="/explore/facebook" className="text-muted-foreground transition-colors hover:text-foreground">Facebook groups</Link></li>
+              <li><Link href="/explore/youtube" className="text-muted-foreground transition-colors hover:text-foreground">YouTube channels</Link></li>
+              <li><Link href="/explore/discord" className="text-muted-foreground transition-colors hover:text-foreground">Discord servers</Link></li>
             </ul>
           </nav>
         </div>

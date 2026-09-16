@@ -20,7 +20,10 @@ import { formatCount } from "@/lib/format"
 import { ShortenForm } from "@/components/shortener/shorten-form"
 import { PlatformIcon } from "@/components/brand-icons"
 import { PLATFORMS } from "@/data/platforms"
+import { PLATFORM_SEO } from "@/data/platform-seo"
 import { Button } from "@/components/ui/button"
+import { JsonLd } from "@/components/seo/json-ld"
+import { absoluteUrl, collectionSchema } from "@/lib/seo"
 
 export const dynamic = "force-dynamic"
 
@@ -57,6 +60,20 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col">
+      {/* Featured communities as ItemList structured data (server-rendered) */}
+      <JsonLd
+        data={collectionSchema({
+          name: "Featured communities | FindLink",
+          description:
+            "The most clicked listings across the FindLink community directory this week.",
+          url: absoluteUrl("/"),
+          items: stats.featured.map((l) => ({
+            name: l.title,
+            url: absoluteUrl(`/link/${l.slug}`),
+          })),
+        })}
+      />
+
       {/* ------------------------------- Hero ------------------------------- */}
       <section className="relative overflow-hidden border-b border-border/40">
         <div className="bg-grid pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_60%_60%_at_50%_0%,black,transparent)]" />
@@ -117,9 +134,13 @@ export default async function HomePage() {
             {PLATFORMS.slice(0, 10).map((p) => (
               <Link
                 key={p.id}
-                href={`/explore?platform=${p.id}`}
+                href={`/explore/${p.id}`}
                 className="group flex shrink-0 flex-col items-center gap-2 rounded-xl px-4 py-2 transition-colors hover:bg-accent/60"
-                title={`Browse ${p.name}`}
+                title={
+                  PLATFORM_SEO[p.id]?.heading
+                    ? `Browse ${PLATFORM_SEO[p.id]?.heading}`
+                    : `Browse ${p.name}`
+                }
               >
                 <PlatformIcon platform={p.id} className="h-7 w-7 transition-transform group-hover:scale-110" />
                 <span className="hidden text-[11px] font-medium text-muted-foreground group-hover:text-foreground sm:block">

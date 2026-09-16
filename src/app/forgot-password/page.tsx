@@ -6,7 +6,10 @@ export const dynamic = "force-dynamic"
 
 // SSR (not prerendered): per-request CSP nonces from src/proxy.ts only apply to dynamically
 // rendered responses — a prerendered shell would ship nonce-less scripts that strict-dynamic blocks.
-export const metadata: Metadata = { title: "Forgot password" }
+export const metadata: Metadata = {
+  title: "Forgot password",
+  robots: { index: false, follow: false }, // one-time token flow — not for search
+}
 
 export default function ForgotPasswordPage() {
   return (

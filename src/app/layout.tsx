@@ -8,12 +8,25 @@ import { Footer } from "@/components/site/footer"
 import { ThemeProvider } from "next-themes"
 import { Toaster } from "@/components/ui/sonner"
 import { getSession } from "@/lib/auth"
-
-const appUrl = process.env.APP_URL || "https://findlink.site"
+import { JsonLd } from "@/components/seo/json-ld"
+import {
+  OG_IMAGE_PATH,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TAGLINE,
+  SITE_URL,
+  organizationSchema,
+  websiteSchema,
+} from "@/lib/seo"
 
 // Google Analytics 4 (gtag.js) — override at build time with
 // NEXT_PUBLIC_GA_ID=… ; unset → this site's measurement ID.
 const GA_ID = process.env.NEXT_PUBLIC_GA_ID || "G-R6LJCEJD24"
+
+// Google Search Console verification token — optional. Set
+// NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION in .env (Search Console → "HTML tag"
+// method → copy the content value) to activate; unset adds nothing.
+const GSC_TOKEN = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || ""
 
 // Mobile browser behaviour: keep user zoom ENABLED (WCAG 1.4.4 — never set maximumScale<1);
 // viewportFit=cover lets the app paint under notches/home-indicators on modern phones.
@@ -28,27 +41,52 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  metadataBase: new URL(appUrl),
+  metadataBase: new URL(SITE_URL),
+  applicationName: SITE_NAME,
+  category: "technology",
   title: {
-    default: "FindLink — Find, Share & Shorten Links",
+    default: `${SITE_NAME} — ${SITE_TAGLINE} | Link Directory & URL Shortener`,
     template: "%s · FindLink",
   },
-  description:
-    "Find and share the best Telegram channels, WhatsApp groups, Facebook pages and more — filtered by category, country and language. Shorten any URL and track every click with detailed analytics.",
-  keywords: ["findlink", "link directory", "url shortener", "telegram channels", "whatsapp groups", "facebook groups", "link sharing", "click analytics"],
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "link directory",
+    "community directory",
+    "url shortener",
+    "free url shortener",
+    "link shortener with analytics",
+    "click tracking",
+    "telegram channel directory",
+    "telegram channels",
+    "whatsapp group links",
+    "whatsapp groups",
+    "facebook groups",
+    "youtube channels",
+    "discord servers",
+    "shorten url",
+    "link in bio",
+  ],
   authors: [{ name: "FindLink" }],
+  creator: "FindLink",
+  publisher: "FindLink",
+  formatDetection: { telephone: false },
+  alternates: { canonical: "/" },
   openGraph: {
-    title: "FindLink — Find, Share & Shorten Links",
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
     description:
-      "The open directory for social communities with a powerful, analytics-driven URL shortener.",
+      "The open directory for social communities with a powerful, analytics-driven URL shortener. Find Telegram channels, WhatsApp groups and more — or shorten any URL and track every click.",
+    url: "/",
     siteName: "FindLink",
     type: "website",
+    images: [{ url: OG_IMAGE_PATH, width: 1200, height: 630, alt: "FindLink — link directory and URL shortener" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "FindLink — Find, Share & Shorten Links",
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
     description: "Discover and share communities. Shorten links. Track everything.",
+    images: [OG_IMAGE_PATH],
   },
+  ...(GSC_TOKEN ? { verification: { google: GSC_TOKEN } } : {}),
 }
 
 export default async function RootLayout({
@@ -77,6 +115,8 @@ export default async function RootLayout({
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased bg-background text-foreground">
+        {/* Site-wide entity structured data (server-rendered, absolute URLs) */}
+        <JsonLd data={[websiteSchema(), organizationSchema()]} />
         <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
         <Script id="gtag-init" strategy="afterInteractive">
           {`window.dataLayer = window.dataLayer || [];
