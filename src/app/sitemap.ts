@@ -15,14 +15,18 @@ import { SITE_URL } from "@/lib/seo"
  *     (a listing's updatedAt / latest listing on a platform) — never faked
  *     with "now" everywhere, which crawlers treat as noise.
  *   - HTTPS absolute URLs only; no redirects, no noindex'd URLs.
- *   - Well under the 50,000-URL single-file limit; no sitemap index needed.
+ *   - Root URL is emitted in the same form Next.js canonicalizes the homepage
+ *     canonical to (no trailing slash) — sitemap and canonical stay identical.
+ *   - Single file is fine up to 50,000 URLs; if the directory ever grows
+ *     beyond a few thousand, switch to generateSitemaps() sharding + a
+ *     sitemap index (Google's "a few thousand" comfort threshold).
  */
 export const dynamic = "force-dynamic"
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [
-    // No trailing slash on the root — matches the canonical tag Next.js
-    // emits for "/" (https://findlink.site), keeping sitemap == canonical.
+    // Same form as the homepage canonical tag Next.js emits (see comment
+    // above) — keeping sitemap == canonical byte-for-byte.
     { url: SITE_URL },
     { url: `${SITE_URL}/explore` },
     { url: `${SITE_URL}/premium` },

@@ -18,6 +18,7 @@ import { JsonLd } from "@/components/seo/json-ld"
 import {
   absoluteUrl,
   breadcrumbSchema,
+  listingSchema,
   OG_IMAGE_PATH,
   type BreadcrumbItem,
 } from "@/lib/seo"
@@ -42,10 +43,16 @@ export async function generateMetadata({
 
   const platform = getPlatform(link.platform)
   const category = getCategory(link.category)
-  const title = `${link.title} — ${platform.name} ${platform.label.toLowerCase()}`
-  const description =
-    link.description?.slice(0, 180) ||
+  // Title pattern: "[Community Name] – [Platform] [Channel/Group]" (the
+  // "%s | FindLink" template appends the brand).
+  const title = `${link.title} – ${platform.name} ${platform.label.toLowerCase()}`
+  // Meta description from the submitted listing description, truncated to
+  // ~155 chars (word-safe: cut back to the last space, add ellipsis).
+  const rawDesc =
+    link.description?.slice(0, 160) ||
     `Discover ${link.title}, a ${platform.name} ${platform.label.toLowerCase()} in ${category.name}, on FindLink — the free community link directory.`
+  const description =
+    rawDesc.length > 155 ? `${rawDesc.slice(0, 155).replace(/\s+\S*$/, "")}…` : rawDesc
 
   return {
     title,
@@ -95,31 +102,65 @@ export default async function LinkDetailPage({
   const platform = getPlatform(link.platform)
   const category = getCategory(link.category)
 
-  const related = await db.link.findMany({
-    where: {
-      status: "ACTIVE",
-      platform: link.platform,
-      id: { not: link.id },
-    },
-    orderBy: { clicks: "desc" },
-    take: 3,
-  })
+  // Related listings: same platform + same category first, then top same-platform
+  // listings to fill up to 3 (read-only queries — no backend process changes).
+  const [sameCategory, samePlatform] = await Promise.all([
+    db.link.findMany({
+      where: {
+        status: "ACTIVE",
+        platform: link.platform,
+        category: link.category,
+        id: { not: link.id },
+      },
+      orderBy: { clicks: "desc" },
+      take: 3,
+    }),
+    db.link.findMany({
+      where: { status: "ACTIVE", platform: link.platform, id: { not: link.id } },
+      orderBy: { clicks: "desc" },
+      take: 6,
+    }),
+  ])
+  const related = [
+    ...sameCategory,
+    ...samePlatform.filter((p) => !sameCategory.some((c) => c.id === p.id)),
+  ].slice(0, 3)
 
   // Breadcrumb mirrors the visible navigation: Home → Explore → platform
-  // directory → listing. Absolute URLs per schema.org requirements.
+  // directory → category → listing. Absolute URLs per schema.org requirements.
+  const platformHeading =
+    PLATFORM_SEO[link.platform]?.heading ?? `${platform.name} directory`
   const breadcrumbs: BreadcrumbItem[] = [
     { name: "Home", url: absoluteUrl("/") },
     { name: "Explore", url: absoluteUrl("/explore") },
+    { name: platformHeading, url: absoluteUrl(`/explore/${link.platform}`) },
     {
-      name: PLATFORM_SEO[link.platform]?.heading ?? `${platform.name} directory`,
-      url: absoluteUrl(`/explore/${link.platform}`),
+      name: category.name,
+      url: absoluteUrl(`/explore?platform=${link.platform}&category=${link.category}`),
     },
     { name: link.title, url: absoluteUrl(`/link/${link.slug}`) },
   ]
 
+  // Individual listing structured data: WebPage + CreativeWork (mainEntity).
+  const pageDescription =
+    link.description?.slice(0, 300) ||
+    `Discover ${link.title}, a ${platform.name} ${platform.label.toLowerCase()} in ${category.name}, on FindLink.`
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
-      <JsonLd data={breadcrumbSchema(breadcrumbs)} />
+      <JsonLd
+        data={[
+          breadcrumbSchema(breadcrumbs),
+          listingSchema({
+            name: link.title,
+            description: pageDescription,
+            url: absoluteUrl(`/link/${link.slug}`),
+            category: category.name,
+            datePublished: link.createdAt,
+            inLanguage: link.language,
+          }),
+        ]}
+      />
 
       <nav aria-label="Breadcrumb" className="mb-4 -ml-2">
         <ol className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -138,7 +179,18 @@ export default async function LinkDetailPage({
           <li>
             <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2 text-muted-foreground">
               <Link href={`/explore/${link.platform}`} className="gap-1">
-                {PLATFORM_SEO[link.platform]?.heading ?? `${platform.name} directory`}
+                {platformHeading}
+              </Link>
+            </Button>
+          </li>
+          <li aria-hidden="true">/</li>
+          <li>
+            <Button asChild variant="ghost" size="sm" className="h-7 rounded-lg px-2 text-muted-foreground">
+              <Link
+                href={`/explore?platform=${link.platform}&category=${link.category}`}
+                className="gap-1"
+              >
+                {category.name}
               </Link>
             </Button>
           </li>
@@ -230,7 +282,7 @@ export default async function LinkDetailPage({
 
       {related.length > 0 && (
         <section className="mt-12">
-          <h2 className="text-xl font-bold tracking-tight">More {platform.name} communities</h2>
+          <h2 className="text-xl font-bold tracking-tight">Related {platform.name} communities</h2>
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {related.map((r) => (
               <LinkCard key={r.id} link={JSON.parse(JSON.stringify(r))} />

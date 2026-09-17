@@ -1,4 +1,5 @@
 import type { PlatformId } from "@/data/platforms"
+import { PLATFORMS } from "@/data/platforms"
 import { cn } from "@/lib/utils"
 
 interface IconProps {
@@ -31,26 +32,39 @@ const COLOURED: Partial<Record<PlatformId, string>> = {
   pinterest: "pinterest",
 }
 
+/**
+ * Descriptive alt for every platform <img> (SEO + accessibility — public
+ * pages must never ship empty alt text). Falls back to the raw platform id
+ * for ids that are not in the PLATFORMS table.
+ */
+const PLATFORM_NAMES: Record<string, string> = Object.fromEntries(
+  PLATFORMS.map((p) => [p.id, p.name]),
+)
+
+function iconAlt(platform: string): string {
+  return `${PLATFORM_NAMES[platform] ?? platform} icon`
+}
+
 export function PlatformIcon({ platform, className }: { platform: PlatformId | string; className?: string }) {
   switch (platform) {
     case "x":
       return (
         <>
-          <img src="/icons/platforms/x.svg" alt="" aria-hidden="true" className={cn(className, "dark:hidden")} />
-          <img src="/icons/platforms/x-light.svg" alt="" aria-hidden="true" className={cn(className, "hidden dark:block")} />
+          <img src="/icons/platforms/x.svg" alt={iconAlt(platform)} className={cn(className, "dark:hidden")} />
+          <img src="/icons/platforms/x-light.svg" alt={iconAlt(platform)} className={cn(className, "hidden dark:block")} />
         </>
       )
     case "tiktok":
       return (
         <>
-          <img src="/icons/platforms/tiktok.svg" alt="" aria-hidden="true" className={cn(className, "dark:hidden")} />
-          <img src="/icons/platforms/tiktok-light.svg" alt="" aria-hidden="true" className={cn(className, "hidden dark:block")} />
+          <img src="/icons/platforms/tiktok.svg" alt={iconAlt(platform)} className={cn(className, "dark:hidden")} />
+          <img src="/icons/platforms/tiktok-light.svg" alt={iconAlt(platform)} className={cn(className, "hidden dark:block")} />
         </>
       )
     default: {
       const file = COLOURED[platform as PlatformId]
       if (file) {
-        return <img src={`/icons/platforms/${file}.svg`} alt="" aria-hidden="true" className={className} />
+        return <img src={`/icons/platforms/${file}.svg`} alt={iconAlt(platform)} className={className} />
       }
       if (platform === "signal") return <SignalIcon className={className} />
       return <GlobeIcon className={className} />

@@ -83,20 +83,19 @@ export default async function HomePage() {
           <div className="mx-auto max-w-3xl text-center">
             <div className="animate-in fade-in slide-in-from-bottom-2 mb-6 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary duration-700">
               <Sparkles className="h-3.5 w-3.5 shrink-0" />
-              <span className="hidden sm:inline">findlink.site — free & open community directory + shortener</span>
-              <span className="sm:hidden">findlink.site — free & open directory</span>
+              <span className="hidden sm:inline">findlink.site — free &amp; open community directory + shortener</span>
+              <span className="sm:hidden">findlink.site — free &amp; open directory</span>
             </div>
 
-            <h1 className="animate-in fade-in slide-in-from-bottom-3 text-4xl font-extrabold leading-[1.1] tracking-tight duration-700 sm:text-5xl md:text-6xl">
-              Every community,
-              <br />
-              <span className="text-gradient">one short link away</span>
+            <h1 className="animate-in fade-in slide-in-from-bottom-3 text-balance text-3xl font-extrabold leading-[1.15] tracking-tight duration-700 sm:text-4xl md:text-5xl">
+              Find Communities &amp; Shorten Links |{" "}
+              <span className="text-gradient">Free Directory &amp; URL Shortener</span>
             </h1>
 
             <p className="animate-in fade-in slide-in-from-bottom-4 mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground duration-700 sm:text-lg">
               Discover and share the best Telegram channels, WhatsApp groups, Facebook pages
-              and more — filtered by category, country and language. Then shrink any URL and
-              watch every click with detailed analytics.
+              and more — filtered by category, country and language. Then shorten any URL and
+              track every click with detailed analytics.
             </p>
 
             <div className="animate-in fade-in slide-in-from-bottom-5 mx-auto mt-10 max-w-xl duration-700">
@@ -156,7 +155,7 @@ export default async function HomePage() {
       <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Featured communities</h2>
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Featured Communities</h2>
             <p className="mt-2 text-sm text-muted-foreground sm:text-base">
               The most clicked listings across the directory this week.
             </p>
@@ -197,7 +196,7 @@ export default async function HomePage() {
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Packed with features, effortless to use
+              Directory Features
             </h2>
             <p className="mt-3 text-sm text-muted-foreground sm:text-base">
               Everything you need to run a professional link hub — fast, reliable and free
@@ -209,7 +208,7 @@ export default async function HomePage() {
             {[
               {
                 icon: Search,
-                title: "Smart discovery",
+                title: "Smart discovery: ",
                 description:
                   "Filter thousands of communities by platform, category, country and language. Full-text search across titles and descriptions, sorted by what's trending.",
               },
@@ -264,7 +263,7 @@ export default async function HomePage() {
       {/* ---------------------------- How it works ---------------------------- */}
       <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">How it works</h2>
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">How It Works</h2>
         </div>
         <div className="mt-12 grid gap-6 md:grid-cols-3">
           {[
@@ -304,7 +303,7 @@ export default async function HomePage() {
         <div className="bg-grid relative overflow-hidden rounded-3xl border border-primary/25 bg-primary/5 px-6 py-14 text-center sm:px-12">
           <div className="pointer-events-none absolute -top-24 left-1/2 h-48 w-96 -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />
           <h2 className="relative text-2xl font-bold tracking-tight sm:text-4xl">
-            {session ? "Your links are waiting" : "Ready to grow your community?"}
+            {session ? "Your links are waiting" : "Grow Your Community"}
           </h2>
           <p className="relative mx-auto mt-4 max-w-xl text-sm text-muted-foreground sm:text-base">
             {session
@@ -328,6 +327,183 @@ export default async function HomePage() {
             <Button asChild size="lg" variant="outline" className="rounded-xl px-8">
               <Link href="/explore">Browse the directory</Link>
             </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* ----------------- Directory & shortener guides (SEO content) ----------------- */}
+      <section className="border-t border-border/40">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              Community Directory &amp; URL Shortener Guides
+            </h2>
+            <p className="mt-3 text-sm text-muted-foreground sm:text-base">
+              Short, practical answers about community directories, country filtering and
+              link shortening with analytics.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                title: "What is a Community Directory and How Does It Work?",
+                body: (
+                  <>
+                    <p>
+                      A community directory is an organized, searchable listing of online
+                      communities — Telegram channels, WhatsApp groups, Discord servers,
+                      Facebook pages and more — grouped by category, country and language.
+                      Instead of hunting through search results or forwarded links, you browse
+                      one curated place and join straight from the listing.
+                    </p>
+                    <p>
+                      FindLink works exactly this way: every submission is email-verified and
+                      moderated, then published on its own shareable page with live click
+                      stats.{" "}
+                      <Link
+                        href="/explore"
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        Explore the social media directory
+                      </Link>{" "}
+                      to see it in action.
+                    </p>
+                  </>
+                ),
+              },
+              {
+                title: "How to Grow Your Community with FindLink Directory",
+                body: (
+                  <>
+                    <p>
+                      Growth starts with discoverability. Submit your community with a clear
+                      title and an honest description, pick the right category, country and
+                      language, and share your public FindLink page wherever you already post —
+                      bios, pinned messages, forums.
+                    </p>
+                    <p>
+                      Each listing shows live click counts, so you can see which promotions
+                      actually convert into visitors. Pair it with a short link and you get the
+                      same measurable feedback for every URL you share.
+                    </p>
+                  </>
+                ),
+              },
+              {
+                title: "Link Shortener with Analytics: Track Your Performance",
+                body: (
+                  <>
+                    <p>
+                      FindLink doubles as a link shortener with analytics built in. Paste any
+                      URL, claim a memorable short code, and watch clicks arrive in real time —
+                      country, device, browser, operating system, referrer and unique visitors.
+                    </p>
+                    <p>
+                      Link tracking analytics answer what generic shorteners cannot: where your
+                      audience lives, which posts convert, and when interest fades. Short links
+                      with click analytics are free to start; premium removes the tracking
+                      limit.
+                    </p>
+                  </>
+                ),
+              },
+              {
+                title: "Directory by Country: Find Communities Worldwide",
+                body: (
+                  <>
+                    <p>
+                      Communities are local by nature — language, culture and time zones all
+                      matter. The directory by country view spans 250+ countries with flag
+                      badges, so you can find WhatsApp groups near you or Telegram channels in
+                      your language.
+                    </p>
+                    <p>
+                      <Link
+                        href="/explore"
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        Filter the whole directory
+                      </Link>{" "}
+                      by country, category or language in a single click — and click analytics
+                      break your own traffic down by country too, pairing discovery and
+                      measurement in one place.
+                    </p>
+                  </>
+                ),
+              },
+              {
+                title: "Free URL Shortener vs. Other Shortening Services",
+                body: (
+                  <>
+                    <p>
+                      Most shortening services stop at the redirect. FindLink&rsquo;s free URL
+                      shortener is built for community builders: short links include click
+                      analytics at no extra cost, custom aliases are supported, and nothing
+                      extra is appended to your URLs.
+                    </p>
+                    <p>
+                      The same account also lists your communities in a public directory — one
+                      place to share and measure everything. Visitor privacy is respected: IPs
+                      are anonymized for unique-click counts and never stored raw.
+                    </p>
+                  </>
+                ),
+              },
+              {
+                title: "Telegram, WhatsApp & Facebook Directory: Platform Guides",
+                body: (
+                  <>
+                    <p>
+                      Every platform has its own directory page, refreshed continuously as
+                      communities are approved. Browse the{" "}
+                      <Link
+                        href="/explore/telegram"
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        Telegram channel directory
+                      </Link>
+                      , the{" "}
+                      <Link
+                        href="/explore/whatsapp"
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        WhatsApp groups directory
+                      </Link>{" "}
+                      or the{" "}
+                      <Link
+                        href="/explore/facebook"
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        Facebook pages directory
+                      </Link>{" "}
+                      for the most-clicked listings and category shortcuts.
+                    </p>
+                    <p>
+                      Prefer the full picture?{" "}
+                      <Link
+                        href="/explore"
+                        className="font-medium text-primary underline-offset-2 hover:underline"
+                      >
+                        Explore all platforms at once
+                      </Link>{" "}
+                      — each guide links straight to active communities you can join in one
+                      click.
+                    </p>
+                  </>
+                ),
+              },
+            ].map((guide) => (
+              <article
+                key={guide.title}
+                className="rounded-2xl border border-border/60 bg-card p-6"
+              >
+                <h3 className="text-base font-semibold">{guide.title}</h3>
+                <div className="mt-2 space-y-2 text-sm leading-relaxed text-muted-foreground">
+                  {guide.body}
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>

@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic"
 // SSR (not prerendered): per-request CSP nonces from src/proxy.ts only apply to dynamically
 // rendered responses — a prerendered shell would ship nonce-less scripts that strict-dynamic blocks.
 export const metadata: Metadata = {
-  title: "Explore the Link Directory — Telegram, WhatsApp & More",
+  title: "Explore the Community Directory – Telegram, WhatsApp, Discord & More",
   description:
-    "Search and filter the full FindLink community directory: Telegram channels, WhatsApp groups, Facebook pages, YouTube channels, Discord servers and more — by category, country and language.",
+    "Search the full community directory: Telegram channels, WhatsApp groups, Discord servers and more, filtered by category, country and language. Plus a free URL shortener.",
   keywords: [
     "link directory",
     "community directory",
@@ -22,9 +22,9 @@ export const metadata: Metadata = {
   ],
   alternates: { canonical: "/explore" },
   openGraph: {
-    title: "Explore the Link Directory — Telegram, WhatsApp & More",
+    title: "Explore the Community Directory – Telegram, WhatsApp, Discord & More",
     description:
-      "Thousands of communities, filterable by platform, category, country and language.",
+      "Search the full community directory: Telegram channels, WhatsApp groups, Discord servers and more, filtered by category, country and language. Plus a free URL shortener.",
     url: "/explore",
     siteName: "FindLink",
     type: "website",

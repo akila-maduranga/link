@@ -11,9 +11,9 @@ import { getSession } from "@/lib/auth"
 import { JsonLd } from "@/components/seo/json-ld"
 import {
   OG_IMAGE_PATH,
+  HOME_TITLE,
   SITE_DESCRIPTION,
   SITE_NAME,
-  SITE_TAGLINE,
   SITE_URL,
   organizationSchema,
   websiteSchema,
@@ -45,8 +45,10 @@ export const metadata: Metadata = {
   applicationName: SITE_NAME,
   category: "technology",
   title: {
-    default: `${SITE_NAME} — ${SITE_TAGLINE} | Link Directory & URL Shortener`,
-    template: "%s · FindLink",
+    // Homepage title (page.tsx defines no title of its own) — exact keyword
+    // target: platforms + directory + free URL shortener.
+    default: HOME_TITLE,
+    template: "%s | FindLink",
   },
   description: SITE_DESCRIPTION,
   keywords: [
@@ -70,20 +72,23 @@ export const metadata: Metadata = {
   creator: "FindLink",
   publisher: "FindLink",
   formatDetection: { telephone: false },
-  alternates: { canonical: "/" },
+  // Canonical for the homepage. Next.js normalizes the root to
+  // https://findlink.site (no trailing slash) — for the ROOT path the empty
+  // form and "/" are the same URL (RFC 3986 §6.2.3), and the sitemap emits
+  // the identical form, so sitemap == canonical stays byte-consistent.
+  alternates: { canonical: `${SITE_URL}/` },
   openGraph: {
-    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
-    description:
-      "The open directory for social communities with a powerful, analytics-driven URL shortener. Find Telegram channels, WhatsApp groups and more — or shorten any URL and track every click.",
+    title: HOME_TITLE,
+    description: SITE_DESCRIPTION,
     url: "/",
     siteName: "FindLink",
     type: "website",
-    images: [{ url: OG_IMAGE_PATH, width: 1200, height: 630, alt: "FindLink — link directory and URL shortener" }],
+    images: [{ url: OG_IMAGE_PATH, width: 1200, height: 630, alt: "FindLink — free link directory & URL shortener" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
-    description: "Discover and share communities. Shorten links. Track everything.",
+    title: HOME_TITLE,
+    description: SITE_DESCRIPTION,
     images: [OG_IMAGE_PATH],
   },
   ...(GSC_TOKEN ? { verification: { google: GSC_TOKEN } } : {}),
