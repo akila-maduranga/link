@@ -1,0 +1,35 @@
+# FindLink
+
+> Free community link directory & URL shortener. Discover Telegram, WhatsApp & Facebook groups by country. Shorten URLs with click analytics.
+
+FindLink is a public directory of online communities — Telegram channels, WhatsApp groups, Facebook pages, Discord servers and more — organized by platform, category, country and language. It also includes a free URL shortener with click analytics: country, device, browser, operating system and referrer for every click. Every listing is email-verified and moderated; short links support custom aliases.
+
+## Directory
+
+- [Explore the community directory](https://findlink.site/explore): All listings with platform, category, country and language filters plus full-text search
+- [Telegram directory](https://findlink.site/explore/telegram): Telegram channels and groups by category, country and language
+- [WhatsApp directory](https://findlink.site/explore/whatsapp): Active WhatsApp group invite links by topic and country
+- [Facebook directory](https://findlink.site/explore/facebook): Facebook groups and pages worth joining
+- [YouTube directory](https://findlink.site/explore/youtube): YouTube channels by topic, country and language
+- [Discord directory](https://findlink.site/explore/discord): Discord servers and communities
+- [X (Twitter) directory](https://findlink.site/explore/x): X profiles and communities
+- [Instagram directory](https://findlink.site/explore/instagram): Instagram accounts and creators
+- [Reddit directory](https://findlink.site/explore/reddit): Subreddits and communities
+- [TikTok directory](https://findlink.site/explore/tiktok): TikTok accounts and creators
+- [LinkedIn directory](https://findlink.site/explore/linkedin): LinkedIn groups and pages
+- [Snapchat directory](https://findlink.site/explore/snapchat): Snapchat accounts and stories
+- [Twitch directory](https://findlink.site/explore/twitch): Twitch channels and streamers
+- [Pinterest directory](https://findlink.site/explore/pinterest): Pinterest boards and creators
+- [Signal directory](https://findlink.site/explore/signal): Signal groups and communities
+- [Other communities](https://findlink.site/explore/other): Communities on platforms beyond the main fourteen
+
+## Tools
+
+- [URL shortener](https://findlink.site/): Free short links with click analytics and custom aliases — form on the homepage
+- [FindLink Premium](https://findlink.site/premium): Unlimited tracked short links, $3 for 30 days
+
+## Notes
+
+- Short links use the form https://findlink.site/s/{code} and redirect to their target URL
+- Community listings live at https://findlink.site/link/{slug} and can be submitted free after email verification
+- The sitemap is at https://findlink.site/sitemap.xml

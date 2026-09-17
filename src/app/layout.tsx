@@ -83,7 +83,7 @@ export const metadata: Metadata = {
     url: "/",
     siteName: "FindLink",
     type: "website",
-    images: [{ url: OG_IMAGE_PATH, width: 1200, height: 630, alt: "FindLink — free link directory & URL shortener" }],
+    images: [{ url: OG_IMAGE_PATH, width: 1200, height: 630, alt: "FindLink — free community link directory & URL shortener" }],
   },
   twitter: {
     card: "summary_large_image",

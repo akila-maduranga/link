@@ -352,10 +352,10 @@ export default async function HomePage() {
                   <>
                     <p>
                       A community directory is an organized, searchable listing of online
-                      communities — Telegram channels, WhatsApp groups, Discord servers,
-                      Facebook pages and more — grouped by category, country and language.
-                      Instead of hunting through search results or forwarded links, you browse
-                      one curated place and join straight from the listing.
+                      communities. Listings cover Telegram channels, WhatsApp groups, Discord
+                      servers, Facebook pages and more, each grouped by category, country and
+                      language. Instead of hunting through search results or forwarded links,
+                      you browse one curated place and join straight from the listing.
                     </p>
                     <p>
                       FindLink works exactly this way: every submission is email-verified and
@@ -501,6 +501,94 @@ export default async function HomePage() {
                 <h3 className="text-base font-semibold">{guide.title}</h3>
                 <div className="mt-2 space-y-2 text-sm leading-relaxed text-muted-foreground">
                   {guide.body}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* --------------------------- FAQ (PAA-style) --------------------------- */}
+      <section className="border-t border-border/40">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              Frequently Asked Questions
+            </h2>
+            <p className="mt-3 text-sm text-muted-foreground sm:text-base">
+              Quick answers about the free URL shortener, the directory and click
+              analytics.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-4 sm:grid-cols-2">
+            {[
+              {
+                title: "Is FindLink a free URL shortener?",
+                body: (
+                  <p>
+                    Yes. FindLink is a free URL shortener with click analytics built in.
+                    Every short link tracks country, device, browser, operating system and
+                    referrer for each click. Free accounts get tracked short links with
+                    full analytics — premium simply lifts the limit. Paste any URL in the
+                    form at the top of this page to try it.
+                  </p>
+                ),
+              },
+              {
+                title: "Can I create custom short links?",
+                body: (
+                  <p>
+                    Yes. FindLink works as a custom URL shortener. When you shorten a URL,
+                    you can claim your own memorable alias instead of a random code. You
+                    can manage, pause or redirect your short links anytime from the
+                    dashboard.
+                  </p>
+                ),
+              },
+              {
+                title: "How do I list my community in the directory?",
+                body: (
+                  <p>
+                    <Link
+                      href="/register"
+                      className="font-medium text-primary underline-offset-2 hover:underline"
+                    >
+                      Create a free account
+                    </Link>{" "}
+                    and verify your email. Then submit your Telegram channel, WhatsApp
+                    group, Facebook page or any other community with a title, description,
+                    category, country and language. A moderator reviews every submission.
+                    Approved listings go live on their own shareable page with live click
+                    stats.
+                  </p>
+                ),
+              },
+              {
+                title: "Which platforms does the directory cover?",
+                body: (
+                  <p>
+                    Fifteen platforms, each with its own{" "}
+                    <Link
+                      href="/explore"
+                      className="font-medium text-primary underline-offset-2 hover:underline"
+                    >
+                      directory page
+                    </Link>
+                    : Telegram, WhatsApp, Facebook, YouTube, Discord, X, Instagram, Reddit,
+                    TikTok, LinkedIn, Snapchat, Twitch, Pinterest, Signal and more. Filter
+                    any platform by category, country and language.
+                  </p>
+                ),
+              },
+            ].map((faq) => (
+              <article
+                key={faq.title}
+                className="rounded-2xl border border-border/60 bg-card p-6"
+              >
+                <h3 className="text-base font-semibold">{faq.title}</h3>
+                <div className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {faq.body}
                 </div>
               </article>
             ))}
